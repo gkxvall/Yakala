@@ -91,6 +91,7 @@ struct SecondaryButton: View {
 struct SearchBarView: View {
     @Binding var text: String
     var placeholder: String = "Fırsat, işletme veya kategori ara"
+    var onSubmit: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -101,6 +102,9 @@ struct SearchBarView: View {
             TextField(placeholder, text: $text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .onSubmit {
+                    onSubmit?()
+                }
 
             if !text.isEmpty {
                 Button {
@@ -221,8 +225,13 @@ struct OfferCardView: View {
     var action: (() -> Void)?
     @EnvironmentObject private var appState: AppState
 
+    private var visibleStatus: OfferStatus {
+        appState.visibleStatus(for: offer)
+    }
+
     var body: some View {
         cardContent
+            .opacity(visibleStatus == .expired || visibleStatus == .paused ? 0.62 : 1)
             .contentShape(Rectangle())
             .onTapGesture {
                 action?()
@@ -236,6 +245,15 @@ struct OfferCardView: View {
                 .overlay(alignment: .topLeading) {
                     DiscountBadgeView(text: offer.discountText, compact: true)
                         .padding(8)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if appState.isOfferClaimed(offer.id) {
+                        StatusPill(text: "Yakalandı", icon: "checkmark.seal.fill", tint: YakalaTheme.success)
+                            .padding(8)
+                    } else if visibleStatus != .active {
+                        StatusPill(text: visibleStatus.rawValue, icon: "pause.circle.fill", tint: YakalaTheme.textSecondary)
+                            .padding(8)
+                    }
                 }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -255,6 +273,7 @@ struct OfferCardView: View {
                             .frame(width: 34, height: 34)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(appState.isOfferSaved(offer.id) ? "Fırsatı kayıttan çıkar" : "Fırsatı kaydet")
                 }
 
                 Text(offer.business.name)
@@ -288,6 +307,10 @@ struct FeaturedOfferCardView: View {
     var action: (() -> Void)?
     @EnvironmentObject private var appState: AppState
 
+    private var visibleStatus: OfferStatus {
+        appState.visibleStatus(for: offer)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PlaceholderImageView(icon: offer.category.icon, title: offer.business.name, height: 156)
@@ -308,6 +331,16 @@ struct FeaturedOfferCardView: View {
                             .padding(12)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(appState.isOfferSaved(offer.id) ? "Fırsatı kayıttan çıkar" : "Fırsatı kaydet")
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if appState.isOfferClaimed(offer.id) {
+                        StatusPill(text: "Yakalandı", icon: "checkmark.seal.fill", tint: YakalaTheme.success)
+                            .padding(12)
+                    } else if visibleStatus != .active {
+                        StatusPill(text: visibleStatus.rawValue, icon: "pause.circle.fill", tint: YakalaTheme.textSecondary)
+                            .padding(12)
+                    }
                 }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -330,10 +363,27 @@ struct FeaturedOfferCardView: View {
         .padding(12)
         .frame(width: 280)
         .yakalaCardStyle()
+        .opacity(visibleStatus == .expired || visibleStatus == .paused ? 0.62 : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             action?()
         }
+    }
+}
+
+struct StatusPill: View {
+    var text: String
+    var icon: String
+    var tint: Color
+
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.white.opacity(0.94))
+            .clipShape(Capsule())
     }
 }
 
@@ -503,6 +553,7 @@ struct ToggleRowView: View {
 
 struct BottomSheetOfferPreviewView: View {
     var offers: [Offer]
+    var onOfferTapped: ((Offer) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -516,7 +567,10 @@ struct BottomSheetOfferPreviewView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(offers.prefix(5)) { offer in
-                        VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            onOfferTapped?(offer)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
                             DiscountBadgeView(text: offer.discountText, compact: true)
                             Text(offer.title)
                                 .font(.subheadline.weight(.semibold))
@@ -533,6 +587,8 @@ struct BottomSheetOfferPreviewView: View {
                         .frame(width: 190, alignment: .leading)
                         .background(YakalaTheme.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

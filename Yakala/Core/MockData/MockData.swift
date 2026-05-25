@@ -2,16 +2,16 @@ import Foundation
 
 enum MockData {
     static let categories: [Category] = [
-        Category(id: "food", name: "Food", icon: "fork.knife", tintHex: "#FF2A2F"),
-        Category(id: "coffee", name: "Coffee", icon: "cup.and.saucer.fill", tintHex: "#9A6B4F"),
-        Category(id: "clothing", name: "Clothing", icon: "tshirt.fill", tintHex: "#6366F1"),
-        Category(id: "electronics", name: "Electronics", icon: "iphone", tintHex: "#0EA5E9"),
-        Category(id: "beauty", name: "Beauty", icon: "sparkles", tintHex: "#EC4899"),
+        Category(id: "food", name: "Yemek", icon: "fork.knife", tintHex: "#FF2A2F"),
+        Category(id: "coffee", name: "Kahve", icon: "cup.and.saucer.fill", tintHex: "#9A6B4F"),
+        Category(id: "clothing", name: "Giyim", icon: "tshirt.fill", tintHex: "#6366F1"),
+        Category(id: "electronics", name: "Elektronik", icon: "iphone", tintHex: "#0EA5E9"),
+        Category(id: "beauty", name: "Güzellik", icon: "sparkles", tintHex: "#EC4899"),
         Category(id: "fitness", name: "Fitness", icon: "figure.run", tintHex: "#22C55E"),
-        Category(id: "grocery", name: "Grocery", icon: "basket.fill", tintHex: "#84CC16"),
-        Category(id: "events", name: "Events", icon: "ticket.fill", tintHex: "#F59E0B"),
-        Category(id: "student_deals", name: "Student Deals", icon: "graduationcap.fill", tintHex: "#8B5CF6"),
-        Category(id: "home", name: "Home", icon: "house.fill", tintHex: "#64748B")
+        Category(id: "grocery", name: "Market", icon: "basket.fill", tintHex: "#84CC16"),
+        Category(id: "events", name: "Etkinlik", icon: "ticket.fill", tintHex: "#F59E0B"),
+        Category(id: "student_deals", name: "Öğrenci", icon: "graduationcap.fill", tintHex: "#8B5CF6"),
+        Category(id: "home", name: "Ev", icon: "house.fill", tintHex: "#64748B")
     ]
 
     static let user = User(

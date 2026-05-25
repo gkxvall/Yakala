@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 
 struct LoginScreen: View {
@@ -6,6 +7,7 @@ struct LoginScreen: View {
     @EnvironmentObject private var appState: AppState
     @State private var email = "mert@yakala.app"
     @State private var password = ""
+    @State private var alert: AuthAlert?
 
     var body: some View {
         NavigationStack {
@@ -24,9 +26,9 @@ struct LoginScreen: View {
                         }
                         .padding(.top, 28)
 
-                        VStack(spacing: 14) {
+                            VStack(spacing: 14) {
                             FormInputView(title: "E-posta", placeholder: "ornek@mail.com", text: $email)
-                            SecureInputView(title: "Şifre", placeholder: "Şifren")
+                            SecureInputView(title: "Şifre", placeholder: "Şifren", text: $password)
 
                             HStack {
                                 Spacer()
@@ -38,14 +40,17 @@ struct LoginScreen: View {
                             }
 
                             PrimaryButton(title: "Giriş Yap") {
-                                appState.login(as: .customer)
-                                onLogin()
+                                login()
                             }
                         }
 
                         VStack(spacing: 12) {
-                            SocialButton(title: "Apple ile Devam Et", icon: "apple.logo")
-                            SocialButton(title: "Google ile Devam Et", icon: "g.circle.fill")
+                            SocialButton(title: "Apple ile Devam Et", icon: "apple.logo") {
+                                alert = AuthAlert(title: "Yakında", message: "Apple ile giriş sonraki sürümde eklenecek.")
+                            }
+                            SocialButton(title: "Google ile Devam Et", icon: "g.circle.fill") {
+                                alert = AuthAlert(title: "Yakında", message: "Google ile giriş sonraki sürümde eklenecek.")
+                            }
                         }
 
                         NavigationLink {
@@ -69,6 +74,23 @@ struct LoginScreen: View {
                 }
             }
         }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
+    }
+
+    private func login() {
+        guard email.trimmingCharacters(in: .whitespacesAndNewlines).contains("@") else {
+            alert = AuthAlert(title: "E-posta gerekli", message: "Lütfen geçerli bir e-posta adresi gir.")
+            return
+        }
+        guard !password.isEmpty else {
+            alert = AuthAlert(title: "Şifre gerekli", message: "Demo giriş için herhangi bir şifre yazabilirsin.")
+            return
+        }
+        appState.updateUserProfile(name: appState.userName, email: email, city: appState.selectedCity)
+        appState.login(as: .customer)
+        onLogin()
     }
 }
 
@@ -78,6 +100,7 @@ struct RegisterScreen: View {
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var alert: AuthAlert?
 
     var body: some View {
         ScreenContainer {
@@ -88,23 +111,47 @@ struct RegisterScreen: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     FormInputView(title: "Ad Soyad", placeholder: "Adın", text: $name)
                     FormInputView(title: "E-posta", placeholder: "ornek@mail.com", text: $email)
-                    SecureInputView(title: "Şifre", placeholder: "En az 8 karakter")
+                    SecureInputView(title: "Şifre", placeholder: "En az 6 karakter", text: $password)
                     PrimaryButton(title: "Kayıt Ol") {
-                        appState.login(as: .customer)
-                        onRegister()
+                        register()
                     }
-                    SocialButton(title: "Apple ile Kayıt Ol", icon: "apple.logo")
+                    SocialButton(title: "Apple ile Kayıt Ol", icon: "apple.logo") {
+                        alert = AuthAlert(title: "Yakında", message: "Sosyal kayıt sonraki sürümde eklenecek.")
+                    }
                 }
                 .padding(24)
             }
         }
         .navigationTitle("Kayıt")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
+    }
+
+    private func register() {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            alert = AuthAlert(title: "Ad soyad gerekli", message: "Devam etmek için adını yaz.")
+            return
+        }
+        guard email.trimmingCharacters(in: .whitespacesAndNewlines).contains("@") else {
+            alert = AuthAlert(title: "E-posta gerekli", message: "Lütfen geçerli bir e-posta adresi gir.")
+            return
+        }
+        guard password.count >= 6 else {
+            alert = AuthAlert(title: "Şifre kısa", message: "Demo kayıt için en az 6 karakter yaz.")
+            return
+        }
+        appState.updateUserProfile(name: cleanName, email: email, city: appState.selectedCity)
+        appState.login(as: .customer)
+        onRegister()
     }
 }
 
 struct ForgotPasswordScreen: View {
     @State private var email = ""
+    @State private var alert: AuthAlert?
 
     var body: some View {
         ScreenContainer {
@@ -115,20 +162,35 @@ struct ForgotPasswordScreen: View {
                     message: "E-posta adresini gir, sana mock sıfırlama bağlantısı gönderelim."
                 )
                 FormInputView(title: "E-posta", placeholder: "ornek@mail.com", text: $email)
-                PrimaryButton(title: "Bağlantı Gönder") {}
+                PrimaryButton(title: "Bağlantı Gönder") {
+                    guard email.trimmingCharacters(in: .whitespacesAndNewlines).contains("@") else {
+                        alert = AuthAlert(title: "E-posta gerekli", message: "Şifre sıfırlama bağlantısı için geçerli bir e-posta gir.")
+                        return
+                    }
+                    alert = AuthAlert(title: "Gönderildi", message: "Şifre sıfırlama bağlantısı gönderildi.")
+                }
                 Spacer()
             }
             .padding(24)
         }
         .navigationTitle("Şifremi Unuttum")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
     }
 }
 
 struct LocationPermissionScreen: View {
     var onContinue: () -> Void = {}
+    var isEditing: Bool = false
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var locationManager: LocationManager
+    @State private var selectedCity = "Kadıköy, İstanbul"
+    @State private var showCityPicker = false
+    @State private var alert: AuthAlert?
+
+    private let cities = ["Kadıköy, İstanbul", "Beşiktaş, İstanbul", "Şişli, İstanbul", "Karşıyaka, İzmir", "Çankaya, Ankara", "Nilüfer, Bursa"]
 
     var body: some View {
         ScreenContainer {
@@ -157,24 +219,65 @@ struct LocationPermissionScreen: View {
                 VStack(spacing: 12) {
                     PrimaryButton(title: "Konumumu Kullan", icon: "location.fill") {
                         locationManager.requestLocationPermission()
-                        appState.completeLocationStep()
+                        appState.useRealLocation()
                         onContinue()
                     }
                     SecondaryButton(title: "Şehir Seçerek Devam Et", icon: "building.2.fill") {
-                        appState.completeLocationStep()
-                        onContinue()
+                        showCityPicker = true
                     }
                 }
             }
             .padding(24)
+        }
+        .onAppear {
+            selectedCity = appState.selectedCity
+        }
+        .onChange(of: locationManager.authorizationStatus) { _, status in
+            if status == .denied || status == .restricted {
+                alert = AuthAlert(title: "Konum izni kapalı", message: "Sorun değil. Şehir seçerek Yakala'yı kullanmaya devam edebilirsin.")
+                showCityPicker = true
+            }
+        }
+        .sheet(isPresented: $showCityPicker) {
+            NavigationStack {
+                List(cities, id: \.self) { city in
+                    Button {
+                        selectedCity = city
+                        appState.updateSelectedCity(city)
+                        showCityPicker = false
+                        onContinue()
+                    } label: {
+                        HStack {
+                            Text(city)
+                            Spacer()
+                            if city == selectedCity {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(YakalaTheme.primary)
+                            }
+                        }
+                    }
+                    .foregroundStyle(YakalaTheme.textPrimary)
+                }
+                .navigationTitle(isEditing ? "Şehri Güncelle" : "Şehir Seç")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Kapat") { showCityPicker = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
         }
     }
 }
 
 struct PreferenceSelectionScreen: View {
     var onContinue: () -> Void = {}
+    var isEditing: Bool = false
     @EnvironmentObject private var appState: AppState
-    @State private var selected = Set<Category>()
+    @State private var selectedIds = Set<String>()
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -187,7 +290,7 @@ struct PreferenceSelectionScreen: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("İlgi Alanlarını Seç")
+                            Text(isEditing ? "İlgi Alanlarını Düzenle" : "İlgi Alanlarını Seç")
                                 .font(.largeTitle.bold())
                                 .foregroundStyle(YakalaTheme.textPrimary)
                             Text("Yakala sana daha iyi öneriler hazırlasın.")
@@ -195,12 +298,12 @@ struct PreferenceSelectionScreen: View {
                         }
 
                         LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(MockData.categories.prefix(9)) { category in
-                                PreferenceCard(category: category, isSelected: selected.contains(category)) {
-                                    if selected.contains(category) {
-                                        selected.remove(category)
+                            ForEach(MockData.categories) { category in
+                                PreferenceCard(category: category, isSelected: selectedIds.contains(category.id)) {
+                                    if selectedIds.contains(category.id) {
+                                        selectedIds.remove(category.id)
                                     } else {
-                                        selected.insert(category)
+                                        selectedIds.insert(category.id)
                                     }
                                 }
                             }
@@ -211,12 +314,12 @@ struct PreferenceSelectionScreen: View {
                     .padding(.bottom, 18)
                 }
 
-                PrimaryButton(title: "Devam Et", icon: "checkmark") {
-                    appState.selectPreferences(selected.map(\.id))
+                PrimaryButton(title: isEditing ? "Kaydet" : "Devam Et", icon: "checkmark") {
+                    appState.selectPreferences(Array(selectedIds))
                     onContinue()
                 }
-                .disabled(selected.isEmpty)
-                .opacity(selected.isEmpty ? 0.45 : 1)
+                .disabled(selectedIds.isEmpty)
+                .opacity(selectedIds.isEmpty ? 0.45 : 1)
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -224,9 +327,8 @@ struct PreferenceSelectionScreen: View {
             }
         }
         .onAppear {
-            if selected.isEmpty {
-                let persistedIds = Set(appState.selectedPreferenceCategoryIds)
-                selected = Set(MockData.categories.filter { persistedIds.contains($0.id) })
+            if selectedIds.isEmpty {
+                selectedIds = Set(appState.selectedPreferenceCategoryIds)
             }
         }
     }
@@ -235,13 +337,13 @@ struct PreferenceSelectionScreen: View {
 private struct SecureInputView: View {
     var title: String
     var placeholder: String
-    @State private var value = ""
+    @Binding var text: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-            SecureField(placeholder, text: $value)
+            SecureField(placeholder, text: $text)
                 .padding(14)
                 .frame(height: 48)
                 .background(YakalaTheme.background)
@@ -257,9 +359,10 @@ private struct SecureInputView: View {
 private struct SocialButton: View {
     var title: String
     var icon: String
+    var action: () -> Void
 
     var body: some View {
-        Button {} label: {
+        Button(action: action) {
             Label(title, systemImage: icon)
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -274,6 +377,12 @@ private struct SocialButton: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct AuthAlert: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
 }
 
 private struct PreferenceCard: View {

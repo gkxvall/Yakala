@@ -8,6 +8,10 @@ final class AppState: ObservableObject {
     @AppStorage("yakala.selectedUserMode") private var storedSelectedUserMode = UserMode.customer.rawValue
     @AppStorage("yakala.hasCompletedLocationStep") private var storedHasCompletedLocationStep = false
     @AppStorage("yakala.hasSelectedPreferences") private var storedHasSelectedPreferences = false
+    @AppStorage("yakala.userName") private var storedUserName = MockData.user.name
+    @AppStorage("yakala.userEmail") private var storedUserEmail = MockData.user.email
+    @AppStorage("yakala.selectedCity") private var storedSelectedCity = MockData.user.city
+    @AppStorage("yakala.locationMode") private var storedLocationMode = LocationMode.manualCity.rawValue
 
     @Published private(set) var selectedPreferenceCategoryIds: [String] {
         didSet { UserDefaultsCodableStore.save(selectedPreferenceCategoryIds, forKey: Keys.selectedPreferenceCategoryIds) }
@@ -57,6 +61,26 @@ final class AppState: ObservableObject {
         didSet { UserDefaultsCodableStore.save(directionClickCounts, forKey: Keys.directionClickCounts) }
     }
 
+    @Published private(set) var recentSearches: [String] {
+        didSet { UserDefaultsCodableStore.save(recentSearches, forKey: Keys.recentSearches) }
+    }
+
+    @Published var notificationSettings: NotificationSettings {
+        didSet { UserDefaultsCodableStore.save(notificationSettings, forKey: Keys.notificationSettings) }
+    }
+
+    @Published private(set) var readNotificationIds: [String] {
+        didSet { UserDefaultsCodableStore.save(readNotificationIds, forKey: Keys.readNotificationIds) }
+    }
+
+    @Published private(set) var hiddenNotificationIds: [String] {
+        didSet { UserDefaultsCodableStore.save(hiddenNotificationIds, forKey: Keys.hiddenNotificationIds) }
+    }
+
+    @Published private(set) var localClaimRecords: [ClaimRecord] {
+        didSet { UserDefaultsCodableStore.save(localClaimRecords, forKey: Keys.localClaimRecords) }
+    }
+
     var hasSeenOnboarding: Bool {
         storedHasSeenOnboarding
     }
@@ -81,6 +105,22 @@ final class AppState: ObservableObject {
         storedHasSelectedPreferences
     }
 
+    var userName: String {
+        storedUserName
+    }
+
+    var userEmail: String {
+        storedUserEmail
+    }
+
+    var selectedCity: String {
+        storedSelectedCity
+    }
+
+    var locationMode: LocationMode {
+        LocationMode(rawValue: storedLocationMode) ?? .manualCity
+    }
+
     init() {
         selectedPreferenceCategoryIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.selectedPreferenceCategoryIds, defaultValue: [])
         savedOfferIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.savedOfferIds, defaultValue: [])
@@ -94,6 +134,11 @@ final class AppState: ObservableObject {
         offerClaimCounts = UserDefaultsCodableStore.load([String: Int].self, forKey: Keys.offerClaimCounts, defaultValue: [:])
         offerSaveCounts = UserDefaultsCodableStore.load([String: Int].self, forKey: Keys.offerSaveCounts, defaultValue: [:])
         directionClickCounts = UserDefaultsCodableStore.load([String: Int].self, forKey: Keys.directionClickCounts, defaultValue: [:])
+        recentSearches = UserDefaultsCodableStore.load([String].self, forKey: Keys.recentSearches, defaultValue: ["Burger", "Kahve", "Öğrenci indirimi", "Spor"])
+        notificationSettings = UserDefaultsCodableStore.load(NotificationSettings.self, forKey: Keys.notificationSettings, defaultValue: NotificationSettings())
+        readNotificationIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.readNotificationIds, defaultValue: [])
+        hiddenNotificationIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.hiddenNotificationIds, defaultValue: [])
+        localClaimRecords = UserDefaultsCodableStore.load([ClaimRecord].self, forKey: Keys.localClaimRecords, defaultValue: [])
     }
 
     func completeOnboarding() {
@@ -111,6 +156,26 @@ final class AppState: ObservableObject {
         objectWillChange.send()
         storedIsAuthenticated = false
         storedSelectedUserMode = UserMode.customer.rawValue
+    }
+
+    func updateUserProfile(name: String, email: String, city: String) {
+        objectWillChange.send()
+        storedUserName = name
+        storedUserEmail = email
+        storedSelectedCity = city
+    }
+
+    func updateSelectedCity(_ city: String) {
+        objectWillChange.send()
+        storedSelectedCity = city
+        storedLocationMode = LocationMode.manualCity.rawValue
+        storedHasCompletedLocationStep = true
+    }
+
+    func useRealLocation() {
+        objectWillChange.send()
+        storedLocationMode = LocationMode.realLocation.rawValue
+        storedHasCompletedLocationStep = true
     }
 
     func selectPreferences(_ ids: [String]) {
@@ -136,6 +201,7 @@ final class AppState: ObservableObject {
         guard !claimedOfferIds.contains(offerId) else { return }
         claimedOfferIds.append(offerId)
         offerClaimCounts[offerId, default: 0] += 1
+        localClaimRecords.append(ClaimRecord(offerId: offerId, code: claimCode(for: offerId), claimedAt: Date()))
     }
 
     func isOfferClaimed(_ offerId: String) -> Bool {
@@ -260,7 +326,11 @@ final class AppState: ObservableObject {
     func customerVisibleOffers() -> [Offer] {
         (locallyCreatedOffers + MockData.offers)
             .filter { !deletedOfferIds.contains($0.id) }
-            .filter { !pausedOfferIds.contains($0.id) }
+            .map { offer in
+                var updated = offer
+                updated.status = visibleStatus(for: offer)
+                return updated
+            }
     }
 
     func businessOffers(for status: OfferStatus) -> [Offer] {
@@ -273,6 +343,76 @@ final class AppState: ObservableObject {
 
     func recordDirectionClick(_ offerId: String) {
         directionClickCounts[offerId, default: 0] += 1
+    }
+
+    func addRecentSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        recentSearches.removeAll { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }
+        recentSearches.insert(trimmed, at: 0)
+        recentSearches = Array(recentSearches.prefix(8))
+    }
+
+    func clearRecentSearches() {
+        recentSearches = []
+    }
+
+    func markNotificationRead(_ id: String) {
+        if !readNotificationIds.contains(id) {
+            readNotificationIds.append(id)
+        }
+    }
+
+    func markAllNotificationsRead(_ ids: [String]) {
+        readNotificationIds = Array(Set(readNotificationIds + ids))
+    }
+
+    func clearNotifications() {
+        hiddenNotificationIds = generatedNotificationIds()
+        readNotificationIds = []
+    }
+
+    func claimCode(for offerId: String) -> String {
+        if let record = localClaimRecords.first(where: { $0.offerId == offerId }) {
+            return record.code
+        }
+        let compact = offerId.uppercased().filter { $0.isLetter || $0.isNumber }
+        return "YAKALA-\(String(compact.suffix(6)))-2026"
+    }
+
+    func canClaimOffer(_ offer: Offer) -> Bool {
+        visibleStatus(for: offer) == .active && effectiveClaimCount(for: offer) < offer.maxClaims
+    }
+
+    func visibleStatus(for offer: Offer) -> OfferStatus {
+        if pausedOfferIds.contains(offer.id) { return .paused }
+        if deletedOfferIds.contains(offer.id) { return .expired }
+        return offer.status
+    }
+
+    func effectiveClaimCount(for offer: Offer) -> Int {
+        offer.claimedCount + (offerClaimCounts[offer.id] ?? 0)
+    }
+
+    func generatedNotifications() -> [NotificationItem] {
+        var items: [NotificationItem] = []
+        for offer in locallyCreatedOffers.prefix(3) where followedBusinessIds.contains(offer.business.id) {
+            items.append(NotificationItem(id: "local_new_\(offer.id)", title: "\(offer.business.name) yeni fırsat yayınladı", message: offer.title, time: "Az önce", icon: "bell.badge.fill", kind: .followedBusiness))
+        }
+        for offer in customerVisibleOffers() where savedOfferIds.contains(offer.id) && ["45 dk", "2 saat", "5 saat", "8 saat", "Bugün", "Bu gece"].contains(offer.expiresIn) {
+            items.append(NotificationItem(id: "saved_ending_\(offer.id)", title: "Kaydettiğin fırsat bitmek üzere", message: "\(offer.title) için son zamanlar.", time: "Bugün", icon: "clock.badge.exclamationmark.fill", kind: .endingSoon))
+        }
+        for id in claimedOfferIds.prefix(3) {
+            if let offer = customerVisibleOffers().first(where: { $0.id == id }) {
+                items.append(NotificationItem(id: "claimed_\(id)", title: "Yakalanan fırsatın hazır", message: "\(offer.business.name) kodunu kasada gösterebilirsin.", time: "Bugün", icon: "qrcode", kind: .nearbyRecommendation))
+            }
+        }
+        let fallback = items.isEmpty ? MockData.notifications : items + MockData.notifications
+        return fallback.filter { !hiddenNotificationIds.contains($0.id) }
+    }
+
+    private func generatedNotificationIds() -> [String] {
+        generatedNotifications().map(\.id)
     }
 
     func resetDemoData() {
@@ -288,12 +428,21 @@ final class AppState: ObservableObject {
         offerClaimCounts = [:]
         offerSaveCounts = [:]
         directionClickCounts = [:]
+        recentSearches = ["Burger", "Kahve", "Öğrenci indirimi", "Spor"]
+        notificationSettings = NotificationSettings()
+        readNotificationIds = []
+        hiddenNotificationIds = []
+        localClaimRecords = []
         objectWillChange.send()
         storedHasSeenOnboarding = false
         storedIsAuthenticated = false
         storedSelectedUserMode = UserMode.customer.rawValue
         storedHasCompletedLocationStep = false
         storedHasSelectedPreferences = false
+        storedUserName = MockData.user.name
+        storedUserEmail = MockData.user.email
+        storedSelectedCity = MockData.user.city
+        storedLocationMode = LocationMode.manualCity.rawValue
     }
 
     func resetAppStateForTesting() {
@@ -378,5 +527,10 @@ final class AppState: ObservableObject {
         static let offerClaimCounts = "yakala.offerClaimCounts"
         static let offerSaveCounts = "yakala.offerSaveCounts"
         static let directionClickCounts = "yakala.directionClickCounts"
+        static let recentSearches = "yakala.recentSearches"
+        static let notificationSettings = "yakala.notificationSettings"
+        static let readNotificationIds = "yakala.readNotificationIds"
+        static let hiddenNotificationIds = "yakala.hiddenNotificationIds"
+        static let localClaimRecords = "yakala.localClaimRecords"
     }
 }

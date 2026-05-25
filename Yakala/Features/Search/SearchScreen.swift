@@ -3,15 +3,19 @@ import SwiftUI
 struct SearchScreen: View {
     @EnvironmentObject private var appState: AppState
     @State private var query = ""
+    @State private var selectedCategory: Category?
     @State private var selectedOffer: Offer?
-    private let recentSearches = ["Burger", "Kahve", "Öğrenci indirimi", "Spor"]
 
     private var results: [Offer] {
-        guard !query.isEmpty else { return appState.customerVisibleOffers().prefix(6).map { $0 } }
-        return appState.customerVisibleOffers().filter {
-            $0.title.localizedCaseInsensitiveContains(query) ||
-            $0.business.name.localizedCaseInsensitiveContains(query) ||
-            $0.category.name.localizedCaseInsensitiveContains(query)
+        appState.customerVisibleOffers().filter { offer in
+            let matchesCategory = selectedCategory == nil || offer.category.id == selectedCategory?.id
+            guard !query.isEmpty else { return matchesCategory }
+            return matchesCategory && (
+                offer.title.localizedCaseInsensitiveContains(query) ||
+                offer.business.name.localizedCaseInsensitiveContains(query) ||
+                offer.category.name.localizedCaseInsensitiveContains(query) ||
+                offer.business.name.localizedCaseInsensitiveContains(query)
+            )
         }
     }
 
@@ -19,14 +23,24 @@ struct SearchScreen: View {
         ScreenContainer {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SearchBarView(text: $query, placeholder: "Ne arıyorsun?")
+                    SearchBarView(text: $query, placeholder: "Ne arıyorsun?") {
+                        appState.addRecentSearch(query)
+                    }
 
                     if query.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            SectionHeaderView(title: "Son Aramalar", actionTitle: nil)
-                            FlowLayout(items: recentSearches) { item in
+                            SectionHeaderView(title: "Son Aramalar", actionTitle: appState.recentSearches.isEmpty ? nil : "Temizle") {
+                                appState.clearRecentSearches()
+                            }
+                            if appState.recentSearches.isEmpty {
+                                Text("Henüz arama yok.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(YakalaTheme.textSecondary)
+                            }
+                            FlowLayout(items: appState.recentSearches) { item in
                                 Button {
                                     query = item
+                                    appState.addRecentSearch(item)
                                 } label: {
                                     Text(item)
                                         .font(.subheadline.weight(.semibold))
@@ -45,9 +59,10 @@ struct SearchScreen: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 ForEach(MockData.categories.prefix(8)) { category in
                                     Button {
-                                        query = category.name
+                                        selectedCategory = category
+                                        query = ""
                                     } label: {
-                                        BusinessCategoryTile(category: category)
+                                        BusinessCategoryTile(category: category, isSelected: selectedCategory?.id == category.id)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -59,6 +74,10 @@ struct SearchScreen: View {
                         SectionHeaderView(title: query.isEmpty ? "Önerilen Sonuçlar" : "Sonuçlar", actionTitle: "\(results.count)")
                         if results.isEmpty {
                             EmptyStateView(icon: "magnifyingglass", title: "Sonuç bulunamadı", message: "Farklı bir kelime veya kategori deneyebilirsin.")
+                            SecondaryButton(title: "Tüm fırsatları göster", icon: "tag.fill") {
+                                query = ""
+                                selectedCategory = nil
+                            }
                         } else {
                             LazyVStack(spacing: 14) {
                                 ForEach(results) { offer in
@@ -73,7 +92,7 @@ struct SearchScreen: View {
                 .padding(24)
             }
         }
-        .navigationTitle("Search")
+        .navigationTitle("Ara")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedOffer) { offer in
             OfferDetailScreen(offer: offer)
@@ -83,13 +102,14 @@ struct SearchScreen: View {
 
 private struct BusinessCategoryTile: View {
     var category: Category
+    var isSelected: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: category.icon)
-                .foregroundStyle(YakalaTheme.primary)
+                .foregroundStyle(isSelected ? .white : YakalaTheme.primary)
                 .frame(width: 34, height: 34)
-                .background(YakalaTheme.primaryLight)
+                .background(isSelected ? YakalaTheme.primary : YakalaTheme.primaryLight)
                 .clipShape(Circle())
             Text(category.name)
                 .font(.subheadline.weight(.semibold))
@@ -98,7 +118,7 @@ private struct BusinessCategoryTile: View {
             Spacer()
         }
         .padding(12)
-        .background(YakalaTheme.background)
+        .background(isSelected ? YakalaTheme.primaryLight : YakalaTheme.background)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

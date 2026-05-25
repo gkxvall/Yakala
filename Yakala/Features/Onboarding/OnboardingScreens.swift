@@ -14,21 +14,16 @@ struct SplashScreen: View {
         ScreenContainer {
             VStack(spacing: 22) {
                 Spacer()
-                YakalaLogoView(size: 300)
-//                VStack(spacing: 8) {
-//                    Text("Yakala")
-//                        .font(.system(size: 42, weight: .black, design: .rounded))
-//                        .foregroundStyle(YakalaTheme.textPrimary)
-//                    Text("Yakındaki fırsatları yakala")
-//                        .font(.headline)
-//                        .foregroundStyle(YakalaTheme.textSecondary)
-//                }
+                YakalaLogoView(size: 150)
+                VStack(spacing: 8) {
+                    Text("Yakala")
+                        .font(.system(size: 42, weight: .black, design: .rounded))
+                        .foregroundStyle(YakalaTheme.textPrimary)
+                    Text("Yakındaki fırsatları yakala")
+                        .font(.headline)
+                        .foregroundStyle(YakalaTheme.textSecondary)
+                }
                 Spacer()
-//                PrimaryButton(title: "Başla", icon: "arrow.right") {
-//                    onContinue()
-//                }
-//                .padding(.horizontal, 24)
-//                .padding(.bottom, 18)
             }
         }
     }
@@ -52,7 +47,7 @@ struct OnboardingScreen: View {
                 HStack {
                     YakalaLogoView(size: 60)
                     Spacer()
-                    Button("Skip") {
+                    Button("Geç") {
                         appState.completeOnboarding()
                         onSkip()
                     }
@@ -95,7 +90,7 @@ struct OnboardingScreen: View {
                 .tabViewStyle(.page(indexDisplayMode: .always))
 
                 VStack(spacing: 12) {
-                    PrimaryButton(title: page == pages.count - 1 ? "Get Started" : "Next", icon: "arrow.right") {
+                    PrimaryButton(title: page == pages.count - 1 ? "Başlayalım" : "İleri", icon: "arrow.right") {
                         if page == pages.count - 1 {
                             appState.completeOnboarding()
                             onFinish()

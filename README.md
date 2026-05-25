@@ -1,41 +1,51 @@
 # Yakala
 
-Yakala is a native SwiftUI iOS prototype for discovering nearby offers, flash deals, student discounts, and local promotions. This build focuses on frontend UI/UX only and uses mock data throughout.
+Yakala is a SwiftUI iOS local-first MVP prototype for discovering nearby offers and managing business promotions. It keeps the current Yakala red branding, uses mock/local data, and persists demo state with `AppState` and `UserDefaults`.
 
-## Requirements
+## Features
 
-- Xcode 15 or newer
-- iOS 17+
-- SwiftUI, MapKit, and Swift Charts
+- Customer onboarding, fake login/register, location or manual city setup, and preference selection.
+- Local offer discovery with search, category filters, saved offers, claimed offers, followed businesses, map previews, and QR-style demo claim codes.
+- Business dashboard with local offer create, edit, pause/resume, delete, profile editing, and demo analytics.
+- CoreLocation foundation for permission/current coordinate, with manual city fallback.
+- Local persistence for saved offers, claimed offers, followed businesses, preferences, recent searches, notification settings, business profile, and locally created offers.
 
-## Run
+## Current Status
+
+This is a runnable local-first MVP prototype. There is no backend yet, but the main buttons and flows work locally and survive app restarts through `UserDefaults`.
+
+## Project Structure
+
+- `YakalaApp.swift`, `ContentView.swift`: app entry and AppState-based routing.
+- `Core/AppState`: local app session, persistence-backed user/business/demo state, and helper methods.
+- `Core/Persistence`: Codable JSON storage helper for `UserDefaults`.
+- `Core/Location`: lightweight CoreLocation manager.
+- `Core/Theme`: Yakala colors and styling helpers.
+- `Core/Models`: Swift models and enums with stable String IDs.
+- `Core/MockData`: local businesses, offers, categories, notifications, and analytics fallback data.
+- `Core/Components`: reusable SwiftUI UI components.
+- `Features/*`: user and business screens grouped by flow.
+
+## How To Run
 
 1. Open `Yakala.xcodeproj` in Xcode.
 2. Select the `Yakala` scheme.
 3. Choose an iPhone simulator running iOS 17 or newer.
 4. Build and run.
 
-## Project Structure
+## Known Limitations
 
-- `YakalaApp.swift` and `ContentView.swift`: app entry and mock app phase routing.
-- `Core/Theme`: brand colors, reusable styling helpers, and design constants.
-- `Core/Models`: Swift structs and enums for users, businesses, offers, categories, notifications, analytics, statuses, and discount types.
-- `Core/MockData`: realistic mock businesses, offers, categories, notifications, preferences, and analytics.
-- `Core/Components`: reusable SwiftUI components such as offer cards, category chips, buttons, search bars, stats, empty states, form inputs, and bottom sheet previews.
-- `Features/Auth`: user login, register, forgot password, location permission, and preference selection screens.
-- `Features/Onboarding`: splash and onboarding screens.
-- `Features/Home`: user TabView and home feed.
-- `Features/OfferDetail`: offer detail and QR claim screens.
-- `Features/Map`: MapKit-based mock offer map.
-- `Features/Search`: search, recent searches, popular categories, results, and empty state.
-- `Features/Saved`: saved offers list and empty state.
-- `Features/Profile`: user profile, settings, notifications, and business profile screens.
-- `Features/BusinessDashboard`: business auth, dashboard, create offer, offer management, analytics, and profile management.
+- No real authentication.
+- No backend, networking, Firebase, or Supabase.
+- No real image upload.
+- QR codes and promo codes are demo-only.
+- Analytics are local demo counters with mock chart fallback.
+- Payments and real redemption validation are not implemented.
 
-## Notes
+## Next Steps
 
-- No backend integration is implemented.
-- Authentication, claiming, analytics, image upload, and settings are mock UI states only.
-- Map pins use mock coordinates around Kadıköy, Istanbul.
-- The design uses Yakala red `#FF2A2F`, light surfaces, SF Symbols, rounded cards, and Apple-style SwiftUI navigation.
-
+- Replace fake auth with a real auth provider.
+- Add backend-backed offers, businesses, claims, and analytics.
+- Add real image upload/storage for business offers and profiles.
+- Add real QR redemption validation.
+- Expand map filters and location-based ranking.

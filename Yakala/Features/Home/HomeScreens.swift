@@ -17,35 +17,35 @@ struct MainUserTabView: View {
                 HomeFeedScreen()
             }
             .tabItem {
-                Label("Home", systemImage: "house.fill")
+                Label("Ana Sayfa", systemImage: "house.fill")
             }
 
             NavigationStack {
                 MapScreen()
             }
             .tabItem {
-                Label("Map", systemImage: "map.fill")
+                Label("Harita", systemImage: "map.fill")
             }
 
             NavigationStack {
                 SearchScreen()
             }
             .tabItem {
-                Label("Search", systemImage: "magnifyingglass")
+                Label("Ara", systemImage: "magnifyingglass")
             }
 
             NavigationStack {
                 SavedOffersScreen()
             }
             .tabItem {
-                Label("Saved", systemImage: "heart.fill")
+                Label("Kaydedilenler", systemImage: "heart.fill")
             }
 
             NavigationStack {
                 UserProfileScreen(onOpenBusinessFlow: onOpenBusinessFlow)
             }
             .tabItem {
-                Label("Profile", systemImage: "person.fill")
+                Label("Profil", systemImage: "person.fill")
             }
         }
     }
@@ -55,9 +55,10 @@ struct HomeFeedScreen: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel = HomeViewModel()
     @State private var selectedOffer: Offer?
+    @State private var selectedList: OfferListRoute?
 
     private var filteredOffers: [Offer] {
-        appState.customerVisibleOffers().filter { offer in
+        sortedOffers(appState.customerVisibleOffers()).filter { offer in
             let matchesCategory = viewModel.selectedCategory == nil || offer.category.id == viewModel.selectedCategory?.id
             let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             let matchesSearch = query.isEmpty ||
@@ -69,15 +70,15 @@ struct HomeFeedScreen: View {
     }
 
     private var featuredOffers: [Offer] {
-        Array(filteredOffers.prefix(6))
+        Array(filteredOffers.filter { appState.visibleStatus(for: $0) == .active }.prefix(6))
     }
 
     private var nearYouOffers: [Offer] {
-        Array(filteredOffers.filter { $0.status == .active }.prefix(10))
+        Array(filteredOffers.filter { appState.visibleStatus(for: $0) == .active }.prefix(8))
     }
 
     private var endingSoonOffers: [Offer] {
-        filteredOffers.filter { ["45 dk", "2 saat", "5 saat", "8 saat", "Bu gece", "Bugün"].contains($0.expiresIn) }
+        filteredOffers.filter { appState.visibleStatus(for: $0) == .active && isEndingSoon($0) }
     }
 
     var body: some View {
@@ -85,10 +86,34 @@ struct HomeFeedScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
-                    SearchBarView(text: $viewModel.searchText)
+                    if appState.locationMode == .manualCity {
+                        Label("Konum kapalı, şehir seçimine göre gösteriliyor.", systemImage: "location.slash.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(YakalaTheme.textSecondary)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(YakalaTheme.primaryLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+
+                    SearchBarView(text: $viewModel.searchText) {
+                        appState.addRecentSearch(viewModel.searchText)
+                    }
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
+                            Button {
+                                viewModel.selectedCategory = nil
+                            } label: {
+                                Text("Tümü")
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 38)
+                                    .foregroundStyle(viewModel.selectedCategory == nil ? .white : YakalaTheme.textPrimary)
+                                    .background(viewModel.selectedCategory == nil ? YakalaTheme.primary : YakalaTheme.background)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
                             ForEach(viewModel.categories) { category in
                                 CategoryChipView(category: category, isSelected: viewModel.selectedCategory == category) {
                                     viewModel.selectedCategory = viewModel.selectedCategory == category ? nil : category
@@ -100,7 +125,9 @@ struct HomeFeedScreen: View {
                     .padding(.horizontal, -24)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeaderView(title: "Öne Çıkanlar", actionTitle: "Tümü") {}
+                        SectionHeaderView(title: "Öne Çıkanlar", actionTitle: "Tümü") {
+                            selectedList = OfferListRoute(title: "Öne Çıkanlar", offers: featuredOffers)
+                        }
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 14) {
                                 ForEach(featuredOffers) { offer in
@@ -115,8 +142,12 @@ struct HomeFeedScreen: View {
                         .padding(.horizontal, -24)
                     }
 
-                    offerSection(title: "Near You", offers: nearYouOffers)
-                    offerSection(title: "Ending Soon", offers: endingSoonOffers)
+                    if filteredOffers.isEmpty {
+                        EmptyStateView(icon: "magnifyingglass", title: "Fırsat bulunamadı", message: "Filtreleri temizleyerek yakındaki fırsatları tekrar görebilirsin.")
+                    } else {
+                        offerSection(title: "Yakınındakiler", offers: nearYouOffers)
+                        offerSection(title: "Bitmek Üzere", offers: endingSoonOffers)
+                    }
                 }
                 .padding(24)
             }
@@ -126,15 +157,18 @@ struct HomeFeedScreen: View {
         .navigationDestination(item: $selectedOffer) { offer in
             OfferDetailScreen(offer: offer)
         }
+        .navigationDestination(item: $selectedList) { route in
+            OfferListScreen(title: route.title, offers: route.offers)
+        }
     }
 
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Merhaba, Mert")
+                Text("Merhaba, \(appState.userName.components(separatedBy: " ").first ?? appState.userName)")
                     .font(.largeTitle.bold())
                     .foregroundStyle(YakalaTheme.primary)
-                Label("Kadıköy, İstanbul", systemImage: "location.fill")
+                Label(appState.locationMode == .realLocation ? "Mevcut konum" : appState.selectedCity, systemImage: "location.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(YakalaTheme.textSecondary)
             }
@@ -160,14 +194,94 @@ struct HomeFeedScreen: View {
 
     private func offerSection(title: String, offers: [Offer]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeaderView(title: title, actionTitle: "Tümü") {}
-            LazyVStack(spacing: 14) {
-                ForEach(offers) { offer in
-                    OfferCardView(offer: offer) {
-                        selectedOffer = offer
+            SectionHeaderView(title: title, actionTitle: "Tümü") {
+                selectedList = OfferListRoute(title: title, offers: offers)
+            }
+            if offers.isEmpty {
+                EmptyStateView(icon: "tag", title: "Bu bölüm boş", message: "Yeni yerel fırsatlar eklendiğinde burada görünecek.")
+            } else {
+                LazyVStack(spacing: 14) {
+                    ForEach(offers) { offer in
+                        OfferCardView(offer: offer) {
+                            selectedOffer = offer
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private func sortedOffers(_ offers: [Offer]) -> [Offer] {
+        let preferenceIds = Set(appState.selectedPreferenceCategoryIds)
+        return offers.sorted { lhs, rhs in
+            let lhsStatus = appState.visibleStatus(for: lhs) == .active ? 0 : 1
+            let rhsStatus = appState.visibleStatus(for: rhs) == .active ? 0 : 1
+            if lhsStatus != rhsStatus { return lhsStatus < rhsStatus }
+            let lhsPreferred = preferenceIds.contains(lhs.category.id) ? 0 : 1
+            let rhsPreferred = preferenceIds.contains(rhs.category.id) ? 0 : 1
+            if lhsPreferred != rhsPreferred { return lhsPreferred < rhsPreferred }
+            if lhs.distance != rhs.distance { return lhs.distance < rhs.distance }
+            return endingSoonRank(lhs) < endingSoonRank(rhs)
+        }
+    }
+
+    private func isEndingSoon(_ offer: Offer) -> Bool {
+        endingSoonRank(offer) < 99
+    }
+
+    private func endingSoonRank(_ offer: Offer) -> Int {
+        if offer.expiresIn.contains("dk") { return 0 }
+        if offer.expiresIn.contains("saat") { return 1 }
+        if ["Bugün", "Bu gece"].contains(offer.expiresIn) { return 2 }
+        return 99
+    }
+}
+
+struct OfferListRoute: Identifiable, Hashable {
+    let id = UUID()
+    var title: String
+    var offers: [Offer]
+}
+
+struct OfferListScreen: View {
+    var title: String
+    var offers: [Offer]
+    @State private var query = ""
+    @State private var selectedOffer: Offer?
+
+    private var filteredOffers: [Offer] {
+        guard !query.isEmpty else { return offers }
+        return offers.filter {
+            $0.title.localizedCaseInsensitiveContains(query) ||
+            $0.business.name.localizedCaseInsensitiveContains(query) ||
+            $0.category.name.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        ScreenContainer {
+            ScrollView {
+                VStack(spacing: 16) {
+                    SearchBarView(text: $query, placeholder: "Bu listede ara")
+                    if filteredOffers.isEmpty {
+                        EmptyStateView(icon: "magnifyingglass", title: "Sonuç yok", message: "Farklı bir arama deneyebilirsin.")
+                    } else {
+                        LazyVStack(spacing: 14) {
+                            ForEach(filteredOffers) { offer in
+                                OfferCardView(offer: offer) {
+                                    selectedOffer = offer
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(24)
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
         }
     }
 }

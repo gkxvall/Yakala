@@ -7,7 +7,11 @@ struct BusinessAuthScreen: View {
     @EnvironmentObject private var appState: AppState
     @State private var isRegistering = false
     @State private var businessName = "Nora Burger"
+    @State private var category = MockData.categories[0]
+    @State private var city = "Kadıköy, İstanbul"
     @State private var email = "owner@nora.com"
+    @State private var password = ""
+    @State private var alert: BusinessAlert?
 
     var body: some View {
         NavigationStack {
@@ -28,12 +32,21 @@ struct BusinessAuthScreen: View {
                         VStack(spacing: 14) {
                             if isRegistering {
                                 FormInputView(title: "İşletme Adı", placeholder: "İşletme adı", text: $businessName)
+                                Picker("Kategori", selection: $category) {
+                                    ForEach(MockData.categories) { item in
+                                        Text(item.name).tag(item)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding(14)
+                                .background(YakalaTheme.background)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                FormInputView(title: "Şehir", placeholder: "Kadıköy, İstanbul", text: $city)
                             }
                             FormInputView(title: "E-posta", placeholder: "owner@mail.com", text: $email)
-                            BusinessSecureField()
+                            BusinessSecureField(password: $password)
                             PrimaryButton(title: isRegistering ? "İşletme Hesabı Oluştur" : "Giriş Yap") {
-                                appState.login(as: .business)
-                                onAuthenticated()
+                                authenticate()
                             }
                             SecondaryButton(title: isRegistering ? "Zaten hesabım var" : "Yeni işletme kaydı") {
                                 withAnimation {
@@ -42,7 +55,7 @@ struct BusinessAuthScreen: View {
                             }
                         }
 
-                        Button("Kullanıcı uygulamasına dön") {
+                        Button("Müşteri hesabına dön") {
                             onBackToUser()
                         }
                         .font(.subheadline.weight(.semibold))
@@ -52,7 +65,44 @@ struct BusinessAuthScreen: View {
                 }
             }
         }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
     }
+
+    private func authenticate() {
+        if isRegistering {
+            guard !businessName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                alert = BusinessAlert(title: "İşletme adı gerekli", message: "Devam etmek için işletme adını yaz.")
+                return
+            }
+            guard !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                alert = BusinessAlert(title: "Şehir gerekli", message: "İşletmenin bulunduğu şehri yaz.")
+                return
+            }
+        }
+        guard email.contains("@") else {
+            alert = BusinessAlert(title: "E-posta gerekli", message: "Geçerli bir işletme e-postası gir.")
+            return
+        }
+        guard !password.isEmpty else {
+            alert = BusinessAlert(title: "Şifre gerekli", message: "Demo giriş için herhangi bir şifre yazabilirsin.")
+            return
+        }
+        var profile = appState.currentBusinessProfile
+        profile.name = businessName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? profile.name : businessName
+        profile.category = category
+        profile.address = city
+        appState.updateBusinessProfile(profile)
+        appState.login(as: .business)
+        onAuthenticated()
+    }
+}
+
+private struct BusinessAlert: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
 }
 
 struct BusinessDashboardTabView: View {
@@ -64,27 +114,27 @@ struct BusinessDashboardTabView: View {
             NavigationStack {
                 BusinessDashboardScreen(onBackToUser: onBackToUser)
             }
-            .tabItem { Label("Dashboard", systemImage: "chart.pie.fill") }
+            .tabItem { Label("Panel", systemImage: "chart.pie.fill") }
 
             NavigationStack {
                 CreateOfferScreen()
             }
-            .tabItem { Label("Create", systemImage: "plus.circle.fill") }
+            .tabItem { Label("Oluştur", systemImage: "plus.circle.fill") }
 
             NavigationStack {
                 BusinessOffersManagementScreen()
             }
-            .tabItem { Label("Offers", systemImage: "tag.fill") }
+            .tabItem { Label("Fırsatlar", systemImage: "tag.fill") }
 
             NavigationStack {
                 BusinessAnalyticsScreen()
             }
-            .tabItem { Label("Analytics", systemImage: "chart.bar.xaxis") }
+            .tabItem { Label("Analiz", systemImage: "chart.bar.xaxis") }
 
             NavigationStack {
                 BusinessProfileManagementScreen()
             }
-            .tabItem { Label("Profile", systemImage: "storefront.fill") }
+            .tabItem { Label("Profil", systemImage: "storefront.fill") }
         }
     }
 }
@@ -133,16 +183,20 @@ struct BusinessDashboardScreen: View {
                     }
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        StatCardView(title: "Active offers", value: "\(appState.activeBusinessOffers().count)", icon: "tag.fill")
-                        StatCardView(title: "Total views", value: compactCount(localViews + MockData.analytics.views), icon: "eye.fill", tint: .blue)
-                        StatCardView(title: "Claims", value: compactCount(localClaims + MockData.analytics.claims), icon: "qrcode", tint: YakalaTheme.success)
-                        StatCardView(title: "Saves", value: compactCount(localSaves + MockData.analytics.saves), icon: "heart.fill", tint: YakalaTheme.warning)
+                        StatCardView(title: "Aktif fırsat", value: "\(appState.activeBusinessOffers().count)", icon: "tag.fill")
+                        StatCardView(title: "Görüntülenme", value: compactCount(localViews + MockData.analytics.views), icon: "eye.fill", tint: .blue)
+                        StatCardView(title: "Yakalama", value: compactCount(localClaims + MockData.analytics.claims), icon: "qrcode", tint: YakalaTheme.success)
+                        StatCardView(title: "Kaydetme", value: compactCount(localSaves + MockData.analytics.saves), icon: "heart.fill", tint: YakalaTheme.warning)
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionHeaderView(title: "Recent Offers", actionTitle: nil)
-                        ForEach(appState.allBusinessOffers().prefix(4)) { offer in
-                            OfferManagementRow(offer: offer)
+                        SectionHeaderView(title: "Son Fırsatlar", actionTitle: nil)
+                        if appState.allBusinessOffers().isEmpty {
+                            EmptyStateView(icon: "tag", title: "Fırsat yok", message: "İlk fırsatını oluşturarak panele veri ekleyebilirsin.")
+                        } else {
+                            ForEach(appState.allBusinessOffers().prefix(4)) { offer in
+                                OfferManagementRow(offer: offer)
+                            }
                         }
                     }
 
@@ -153,7 +207,7 @@ struct BusinessDashboardScreen: View {
                 .padding(24)
             }
         }
-        .navigationTitle("Business")
+        .navigationTitle("İşletme")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -190,6 +244,7 @@ struct CreateOfferScreen: View {
     @State private var terms = ""
     @State private var selectedAudiences = Set(["Herkes"])
     @State private var alert: OfferFormAlert?
+    @State private var showUploadAlert = false
 
     private let audiences = ["Herkes", "Öğrenci", "Yeni müşteri", "Yakındaki kullanıcı", "Takipçiler"]
 
@@ -198,13 +253,13 @@ struct CreateOfferScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     uploadPlaceholder
-                    FormInputView(title: "Offer title", placeholder: "Örn. Öğle menüsünde %25", text: $title)
-                    FormInputView(title: "Description", placeholder: "Fırsat açıklaması", text: $description, axis: .vertical)
+                    FormInputView(title: "Fırsat başlığı", placeholder: "Örn. Öğle menüsünde %25", text: $title)
+                    FormInputView(title: "Açıklama", placeholder: "Fırsat açıklaması", text: $description, axis: .vertical)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Category")
+                        Text("Kategori")
                             .font(.subheadline.weight(.semibold))
-                        Picker("Category", selection: $category) {
+                        Picker("Kategori", selection: $category) {
                             ForEach(MockData.categories) { item in
                                 Text(item.name).tag(item)
                             }
@@ -217,9 +272,9 @@ struct CreateOfferScreen: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Discount type")
+                        Text("İndirim tipi")
                             .font(.subheadline.weight(.semibold))
-                        Picker("Discount type", selection: $discountType) {
+                        Picker("İndirim tipi", selection: $discountType) {
                             ForEach(DiscountType.allCases, id: \.self) { item in
                                 Text(item.rawValue).tag(item)
                             }
@@ -228,27 +283,27 @@ struct CreateOfferScreen: View {
                     }
 
                     HStack(spacing: 12) {
-                        FormInputView(title: "Original price", placeholder: "₺", text: $originalPrice)
-                        FormInputView(title: "Discounted price", placeholder: "₺", text: $discountedPrice)
+                        FormInputView(title: "Orijinal fiyat", placeholder: "₺", text: $originalPrice)
+                        FormInputView(title: "İndirimli fiyat", placeholder: "₺", text: $discountedPrice)
                     }
 
-                    DatePicker("Start date/time", selection: $startDate)
+                    DatePicker("Başlangıç tarihi/saati", selection: $startDate)
                         .datePickerStyle(.compact)
                         .padding(14)
                         .background(YakalaTheme.background)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                    DatePicker("End date/time", selection: $endDate)
+                    DatePicker("Bitiş tarihi/saati", selection: $endDate)
                         .datePickerStyle(.compact)
                         .padding(14)
                         .background(YakalaTheme.background)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                    FormInputView(title: "Max claims", placeholder: "Örn. 250", text: $maxClaims)
-                    FormInputView(title: "Terms and conditions", placeholder: "Kampanya koşulları", text: $terms, axis: .vertical)
+                    FormInputView(title: "Maksimum kullanım", placeholder: "Örn. 250", text: $maxClaims)
+                    FormInputView(title: "Koşullar", placeholder: "Kampanya koşulları", text: $terms, axis: .vertical)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Target audience")
+                        Text("Hedef kitle")
                             .font(.subheadline.weight(.semibold))
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], spacing: 10) {
                             ForEach(audiences, id: \.self) { audience in
@@ -272,14 +327,14 @@ struct CreateOfferScreen: View {
                         }
                     }
 
-                    PrimaryButton(title: editingOffer == nil ? "Publish" : "Save Changes", icon: editingOffer == nil ? "paperplane.fill" : "checkmark") {
+                    PrimaryButton(title: editingOffer == nil ? "Yayınla" : "Değişiklikleri Kaydet", icon: editingOffer == nil ? "paperplane.fill" : "checkmark") {
                         submit()
                     }
                 }
                 .padding(24)
             }
         }
-        .navigationTitle(editingOffer == nil ? "Create Offer" : "Edit Offer")
+        .navigationTitle(editingOffer == nil ? "Fırsat Oluştur" : "Fırsatı Düzenle")
         .navigationBarTitleDisplayMode(.inline)
         .alert(item: $alert) { alert in
             Alert(
@@ -293,18 +348,23 @@ struct CreateOfferScreen: View {
             )
         }
         .onAppear(perform: loadEditingOffer)
+        .alert("Yakında", isPresented: $showUploadAlert) {
+            Button("Tamam", role: .cancel) {}
+        } message: {
+            Text("Görsel yükleme backend bağlandığında eklenecek.")
+        }
     }
 
     private var uploadPlaceholder: some View {
-        Button {} label: {
+        Button { showUploadAlert = true } label: {
             VStack(spacing: 10) {
                 Image(systemName: "photo.badge.plus")
                     .font(.system(size: 42, weight: .semibold))
                     .foregroundStyle(YakalaTheme.primary)
-                Text("Upload image placeholder")
+                Text("Görsel yükle")
                     .font(.headline)
                     .foregroundStyle(YakalaTheme.textPrimary)
-                Text("Mock UI only")
+                Text("Şimdilik yerel demo")
                     .font(.caption)
                     .foregroundStyle(YakalaTheme.textSecondary)
             }
@@ -356,6 +416,18 @@ struct CreateOfferScreen: View {
         let discounted = Double(discountedPrice.replacingOccurrences(of: ",", with: "."))
         let claims = Int(maxClaims) ?? 0
 
+        guard claims > 0 else {
+            alert = OfferFormAlert(title: "Kullanım limiti gerekli", message: "Maksimum kullanım 0'dan büyük olmalı.")
+            return
+        }
+
+        if discountType != .buyOneGetOne {
+            guard let original, let discounted, original > 0, discounted >= 0, discounted < original else {
+                alert = OfferFormAlert(title: "Fiyatları kontrol et", message: "Bu indirim tipi için geçerli orijinal ve indirimli fiyat gir.")
+                return
+            }
+        }
+
         if let editingOffer {
             var updated = editingOffer
             updated.title = cleanedTitle
@@ -392,7 +464,7 @@ struct CreateOfferScreen: View {
             clearForm()
         }
 
-        alert = OfferFormAlert(title: "Kaydedildi", message: "Fırsat yerel olarak kaydedildi.", shouldDismiss: editingOffer != nil)
+        alert = OfferFormAlert(title: "Kaydedildi", message: "Fırsat yerel olarak kaydedildi.", shouldDismiss: true)
     }
 
     private func clearForm() {
@@ -473,7 +545,7 @@ struct BusinessOffersManagementScreen: View {
     var body: some View {
         ScreenContainer {
             VStack(spacing: 16) {
-                Picker("Status", selection: $selectedStatus) {
+                Picker("Durum", selection: $selectedStatus) {
                     ForEach([OfferStatus.active, .scheduled, .expired, .paused], id: \.self) { status in
                         Text(status.rawValue).tag(status)
                     }
@@ -506,7 +578,7 @@ struct BusinessOffersManagementScreen: View {
                 }
             }
         }
-        .navigationTitle("Offers")
+        .navigationTitle("Fırsatlar")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Fırsat silinsin mi?", isPresented: Binding(
             get: { pendingDeleteOffer != nil },
@@ -558,13 +630,17 @@ struct BusinessAnalyticsScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        StatCardView(title: "Views", value: "\(localViews == 0 ? analytics.views : localViews)", icon: "eye.fill")
-                        StatCardView(title: "Claims", value: "\(localClaims == 0 ? analytics.claims : localClaims)", icon: "qrcode", tint: YakalaTheme.success)
-                        StatCardView(title: "Save rate", value: String(format: "%.1f%%", saveRate), icon: "heart.fill", tint: YakalaTheme.warning)
-                        StatCardView(title: "Direction clicks", value: "\(localDirections == 0 ? analytics.directionClicks : localDirections)", icon: "arrow.triangle.turn.up.right.diamond.fill", tint: .blue)
+                        StatCardView(title: "Görüntülenme", value: "\(localViews == 0 ? analytics.views : localViews)", icon: "eye.fill")
+                        StatCardView(title: "Yakalama", value: "\(localClaims == 0 ? analytics.claims : localClaims)", icon: "qrcode", tint: YakalaTheme.success)
+                        StatCardView(title: "Kaydetme oranı", value: String(format: "%.1f%%", saveRate), icon: "heart.fill", tint: YakalaTheme.warning)
+                        StatCardView(title: "Yol tarifi", value: "\(localDirections == 0 ? analytics.directionClicks : localDirections)", icon: "arrow.triangle.turn.up.right.diamond.fill", tint: .blue)
                     }
 
-                    AnalyticsCardView(title: "Views over time", subtitle: "Mock weekly chart") {
+                    Text("Analizler bu MVP'de cihaz içinde tutulan demo verileridir.")
+                        .font(.caption)
+                        .foregroundStyle(YakalaTheme.textSecondary)
+
+                    AnalyticsCardView(title: "Zamana göre görüntülenme", subtitle: "Yerel demo grafik") {
                         Chart(analytics.viewsOverTime) { point in
                             BarMark(x: .value("Day", point.label), y: .value("Views", point.value))
                                 .foregroundStyle(YakalaTheme.primary)
@@ -572,11 +648,11 @@ struct BusinessAnalyticsScreen: View {
                         .frame(height: 190)
                     }
 
-                    AnalyticsCardView(title: "Claims over time", subtitle: "Daily claimed offer count") {
+                    AnalyticsCardView(title: "Zamana göre yakalama", subtitle: "Günlük yakalanan fırsat sayısı") {
                         MiniLineChart(points: analytics.claimsOverTime)
                     }
 
-                    AnalyticsCardView(title: "Best performing offers", subtitle: "Based on claims and saves") {
+                    AnalyticsCardView(title: "En iyi fırsatlar", subtitle: "Yakalama ve kaydetmeye göre") {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(Array(bestPerformingOffers.enumerated()), id: \.offset) { index, title in
                                 HStack {
@@ -593,9 +669,9 @@ struct BusinessAnalyticsScreen: View {
                             }
                             Divider()
                             HStack {
-                                Label("\(analytics.mapClicks) map clicks", systemImage: "map.fill")
+                                Label("\(analytics.mapClicks) harita tıklaması", systemImage: "map.fill")
                                 Spacer()
-                                Label("\(localDirections == 0 ? analytics.directionClicks : localDirections) directions", systemImage: "location.fill")
+                                Label("\(localDirections == 0 ? analytics.directionClicks : localDirections) yol tarifi", systemImage: "location.fill")
                             }
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(YakalaTheme.textSecondary)
@@ -605,7 +681,7 @@ struct BusinessAnalyticsScreen: View {
                 .padding(24)
             }
         }
-        .navigationTitle("Analytics")
+        .navigationTitle("Analiz")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -620,36 +696,65 @@ struct BusinessProfileManagementScreen: View {
     @State private var phone = "+90 216 555 1000"
     @State private var instagram = "@noraburger"
     @State private var showSavedAlert = false
+    @State private var showUploadAlert = false
+    @State private var validationAlert: BusinessAlert?
 
     var body: some View {
         ScreenContainer {
             ScrollView {
                 VStack(spacing: 18) {
                     HStack(spacing: 12) {
-                        ImageUploadSmall(title: "Logo", icon: "person.crop.square")
-                        ImageUploadSmall(title: "Cover", icon: "photo")
+                        Button { showUploadAlert = true } label: {
+                            ImageUploadSmall(title: "Logo", icon: "person.crop.square")
+                        }
+                        .buttonStyle(.plain)
+                        Button { showUploadAlert = true } label: {
+                            ImageUploadSmall(title: "Kapak", icon: "photo")
+                        }
+                        .buttonStyle(.plain)
                     }
-                    FormInputView(title: "Business name", placeholder: "İşletme adı", text: $name)
-                    FormInputView(title: "Category", placeholder: "Kategori", text: $category)
-                    FormInputView(title: "Description", placeholder: "Açıklama", text: $description, axis: .vertical)
-                    FormInputView(title: "Address", placeholder: "Adres", text: $address, axis: .vertical)
-                    FormInputView(title: "Working hours", placeholder: "Saatler", text: $hours)
-                    FormInputView(title: "Phone", placeholder: "Telefon", text: $phone)
-                    FormInputView(title: "Social links", placeholder: "Instagram / web", text: $instagram)
-                    PrimaryButton(title: "Save Changes", icon: "checkmark") {
+                    FormInputView(title: "İşletme adı", placeholder: "İşletme adı", text: $name)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Kategori")
+                            .font(.subheadline.weight(.semibold))
+                        Picker("Kategori", selection: $category) {
+                            ForEach(MockData.categories.map(\.name), id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(YakalaTheme.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    FormInputView(title: "Açıklama", placeholder: "Açıklama", text: $description, axis: .vertical)
+                    FormInputView(title: "Adres", placeholder: "Adres", text: $address, axis: .vertical)
+                    FormInputView(title: "Çalışma saatleri", placeholder: "Saatler", text: $hours)
+                    FormInputView(title: "Telefon", placeholder: "Telefon", text: $phone)
+                    FormInputView(title: "Sosyal bağlantılar", placeholder: "Instagram / web", text: $instagram)
+                    PrimaryButton(title: "Değişiklikleri Kaydet", icon: "checkmark") {
                         saveProfile()
                     }
                 }
                 .padding(24)
             }
         }
-        .navigationTitle("Business Profile")
+        .navigationTitle("İşletme Profili")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: loadProfile)
         .alert("Kaydedildi", isPresented: $showSavedAlert) {
             Button("Tamam", role: .cancel) {}
         } message: {
             Text("İşletme profili yerel olarak güncellendi.")
+        }
+        .alert("Yakında", isPresented: $showUploadAlert) {
+            Button("Tamam", role: .cancel) {}
+        } message: {
+            Text("Logo ve kapak görseli yükleme sonraki sürümde eklenecek.")
+        }
+        .alert(item: $validationAlert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
         }
     }
 
@@ -664,12 +769,24 @@ struct BusinessProfileManagementScreen: View {
     }
 
     private func saveProfile() {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            validationAlert = BusinessAlert(title: "İsim gerekli", message: "İşletme adı boş olamaz.")
+            return
+        }
+        guard !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            validationAlert = BusinessAlert(title: "Adres gerekli", message: "İşletme adresi boş olamaz.")
+            return
+        }
+        guard !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            validationAlert = BusinessAlert(title: "Telefon gerekli", message: "Telefon alanı boş olamaz.")
+            return
+        }
         let selectedCategory = MockData.categories.first {
             $0.name.localizedCaseInsensitiveContains(category) || category.localizedCaseInsensitiveContains($0.name)
         } ?? appState.currentBusinessProfile.category
 
         var updated = appState.currentBusinessProfile
-        updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? updated.name : name
+        updated.name = name
         updated.category = selectedCategory
         updated.description = description
         updated.address = address
@@ -681,7 +798,7 @@ struct BusinessProfileManagementScreen: View {
 }
 
 private struct BusinessSecureField: View {
-    @State private var password = ""
+    @Binding var password: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -716,7 +833,7 @@ private struct OfferManagementRow: View {
                         .font(.headline)
                         .foregroundStyle(YakalaTheme.textPrimary)
                         .lineLimit(2)
-                    Text("\(offer.claimedCount) claims · \(offer.status.rawValue)")
+                    Text("\(offer.claimedCount) kullanım · \(offer.status.rawValue)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(YakalaTheme.textSecondary)
                 }
@@ -729,15 +846,15 @@ private struct OfferManagementRow: View {
                     NavigationLink {
                         CreateOfferScreen(editingOffer: offer)
                     } label: {
-                        SmallActionLabel(title: "Edit", icon: "pencil")
+                        SmallActionLabel(title: "Düzenle", icon: "pencil")
                     }
                     .buttonStyle(.plain)
                     SmallActionButton(
-                        title: offer.status == .paused ? "Resume" : "Pause",
+                        title: offer.status == .paused ? "Sürdür" : "Duraklat",
                         icon: offer.status == .paused ? "play.fill" : "pause.fill",
                         action: { onPause?() }
                     )
-                    SmallActionButton(title: "Delete", icon: "trash.fill", tint: YakalaTheme.primary) {
+                    SmallActionButton(title: "Sil", icon: "trash.fill", tint: YakalaTheme.primary) {
                         onDelete?()
                     }
                 }

@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct OfferDetailScreen: View {
@@ -5,6 +6,8 @@ struct OfferDetailScreen: View {
     @EnvironmentObject private var appState: AppState
     @State private var isShowingClaimCode = false
     @State private var selectedSimilarOffer: Offer?
+    @State private var alert: OfferDetailAlert?
+    @State private var hasRecordedView = false
 
     var body: some View {
         ScreenContainer {
@@ -68,8 +71,7 @@ struct OfferDetailScreen: View {
 
                     VStack(spacing: 12) {
                         Button {
-                            appState.claimOffer(offer.id)
-                            isShowingClaimCode = true
+                            claimOrShowCode()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: appState.isOfferClaimed(offer.id) ? "checkmark.seal.fill" : "qrcode")
@@ -85,13 +87,13 @@ struct OfferDetailScreen: View {
                         .buttonStyle(.plain)
 
                         SecondaryButton(title: "Yol Tarifi Al", icon: "arrow.triangle.turn.up.right.diamond.fill") {
-                            appState.recordDirectionClick(offer.id)
+                            openDirections()
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderView(title: "Benzer Fırsatlar", actionTitle: nil)
-                        ForEach(appState.customerVisibleOffers().filter { $0.category.id == offer.category.id && $0.id != offer.id }.prefix(3)) { similar in
+                        ForEach(appState.customerVisibleOffers().filter { $0.category.id == offer.category.id && $0.id != offer.id && appState.visibleStatus(for: $0) == .active }.prefix(3)) { similar in
                             OfferCardView(offer: similar) {
                                 selectedSimilarOffer = similar
                             }
@@ -110,7 +112,13 @@ struct OfferDetailScreen: View {
             OfferDetailScreen(offer: offer)
         }
         .onAppear {
-            appState.recordOfferView(offer.id)
+            if !hasRecordedView {
+                appState.recordOfferView(offer.id)
+                hasRecordedView = true
+            }
+        }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
         }
     }
 
@@ -119,7 +127,7 @@ struct OfferDetailScreen: View {
             MiniInfoCard(title: "Geçerlilik", value: offer.validUntil, icon: "calendar.badge.clock")
             MiniInfoCard(title: "Kalan Süre", value: offer.expiresIn, icon: "clock.fill")
             MiniInfoCard(title: "Kategori", value: offer.category.name, icon: offer.category.icon)
-            MiniInfoCard(title: "Kullanım", value: "\(offer.claimedCount)/\(offer.maxClaims)", icon: "qrcode")
+            MiniInfoCard(title: "Kullanım", value: "\(appState.effectiveClaimCount(for: offer))/\(offer.maxClaims)", icon: "qrcode")
         }
     }
 
@@ -136,10 +144,49 @@ struct OfferDetailScreen: View {
         .padding(16)
         .yakalaCardStyle()
     }
+
+    private func claimOrShowCode() {
+        if appState.isOfferClaimed(offer.id) {
+            isShowingClaimCode = true
+            return
+        }
+        guard appState.canClaimOffer(offer) else {
+            let status = appState.visibleStatus(for: offer)
+            let message = status == .active ? "Bu fırsat için kullanım limiti dolmuş görünüyor." : "Bu fırsat şu anda \(status.rawValue.lowercased())."
+            alert = OfferDetailAlert(title: "Fırsat kullanılamıyor", message: message)
+            return
+        }
+        appState.claimOffer(offer.id)
+        isShowingClaimCode = true
+    }
+
+    private func openDirections() {
+        appState.recordDirectionClick(offer.id)
+        let coordinate = CLLocationCoordinate2D(latitude: offer.business.latitude, longitude: offer.business.longitude)
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = offer.business.name
+        let opened = mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+        if !opened {
+            alert = OfferDetailAlert(title: "Harita açılamadı", message: "Apple Haritalar şu anda açılamıyor.")
+        }
+    }
+}
+
+private struct OfferDetailAlert: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
 }
 
 struct ClaimQRCodeScreen: View {
     var offer: Offer
+    @EnvironmentObject private var appState: AppState
+    @State private var alert: OfferDetailAlert?
+
+    private var claimCode: String {
+        appState.claimCode(for: offer.id)
+    }
 
     var body: some View {
         ScreenContainer {
@@ -154,8 +201,8 @@ struct ClaimQRCodeScreen: View {
                     }
 
                     VStack(spacing: 18) {
-                        QRPlaceholder()
-                        Text("YAKALA-\(offer.business.name.prefix(4).uppercased())-2026")
+                        QRPlaceholder(code: claimCode)
+                        Text(claimCode)
                             .font(.title3.monospaced().bold())
                             .foregroundStyle(YakalaTheme.textPrimary)
                             .padding(.horizontal, 16)
@@ -169,11 +216,24 @@ struct ClaimQRCodeScreen: View {
                     OfferCardView(offer: offer)
 
                     HStack(spacing: 12) {
-                        MiniInfoCard(title: "Süre", value: "14:59", icon: "timer")
-                        MiniInfoCard(title: "Durum", value: "Aktif", icon: "checkmark.seal.fill")
+                        MiniInfoCard(title: "Süre", value: "Bugün geçerli", icon: "timer")
+                        MiniInfoCard(title: "Durum", value: appState.isOfferClaimed(offer.id) ? "Yakalandı" : "Hazır", icon: "checkmark.seal.fill")
                     }
 
-                    Text("Kod tek kullanımlıktır. İşletme personeline QR kodu veya promosyon kodunu göstererek fırsatı kullanabilirsin.")
+                    HStack(spacing: 12) {
+                        SecondaryButton(title: "Kodu Kopyala", icon: "doc.on.doc.fill") {
+                            UIPasteboard.general.string = claimCode
+                            alert = OfferDetailAlert(title: "Kopyalandı", message: "Fırsat kodu panoya kopyalandı.")
+                        }
+                        SecondaryButton(title: "Yol Tarifi Al", icon: "location.fill") {
+                            appState.recordDirectionClick(offer.id)
+                            let item = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: offer.business.latitude, longitude: offer.business.longitude)))
+                            item.name = offer.business.name
+                            _ = item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+                        }
+                    }
+
+                    Text("Kod tek kullanımlıktır. Bu ekran yerel demo amaçlıdır; gerçek doğrulama backend bağlandığında eklenecek.")
                         .font(.subheadline)
                         .foregroundStyle(YakalaTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -184,6 +244,9 @@ struct ClaimQRCodeScreen: View {
         }
         .navigationTitle("QR Kod")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
     }
 }
 
@@ -219,13 +282,15 @@ private struct MiniInfoCard: View {
 }
 
 private struct QRPlaceholder: View {
+    var code: String
+
     var body: some View {
         VStack(spacing: 6) {
             ForEach(0..<7, id: \.self) { row in
                 HStack(spacing: 6) {
                     ForEach(0..<7, id: \.self) { column in
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill((row + column).isMultiple(of: 2) || row == column ? YakalaTheme.textPrimary : YakalaTheme.border)
+                            .fill(isFilled(row: row, column: column) ? YakalaTheme.textPrimary : YakalaTheme.border)
                             .frame(width: 22, height: 22)
                     }
                 }
@@ -238,6 +303,12 @@ private struct QRPlaceholder: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(YakalaTheme.border, lineWidth: 1)
         )
+    }
+
+    private func isFilled(row: Int, column: Int) -> Bool {
+        let scalars = Array(code.unicodeScalars)
+        let value = scalars[(row * 7 + column) % max(1, scalars.count)].value
+        return (Int(value) + row + column).isMultiple(of: 2) || row == column
     }
 }
 
