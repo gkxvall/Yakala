@@ -2,6 +2,9 @@ import SwiftUI
 
 struct OfferDetailScreen: View {
     var offer: Offer
+    @EnvironmentObject private var appState: AppState
+    @State private var isShowingClaimCode = false
+    @State private var selectedSimilarOffer: Offer?
 
     var body: some View {
         ScreenContainer {
@@ -13,13 +16,18 @@ struct OfferDetailScreen: View {
                                 .padding(16)
                         }
                         .overlay(alignment: .topTrailing) {
-                            Image(systemName: offer.isSaved ? "heart.fill" : "heart")
-                                .font(.title3)
-                                .foregroundStyle(offer.isSaved ? YakalaTheme.primary : YakalaTheme.textPrimary)
-                                .frame(width: 44, height: 44)
-                                .background(.white.opacity(0.94))
-                                .clipShape(Circle())
-                                .padding(16)
+                            Button {
+                                appState.toggleSavedOffer(offer.id)
+                            } label: {
+                                Image(systemName: appState.isOfferSaved(offer.id) ? "heart.fill" : "heart")
+                                    .font(.title3)
+                                    .foregroundStyle(appState.isOfferSaved(offer.id) ? YakalaTheme.primary : YakalaTheme.textPrimary)
+                                    .frame(width: 44, height: 44)
+                                    .background(.white.opacity(0.94))
+                                    .clipShape(Circle())
+                                    .padding(16)
+                            }
+                            .buttonStyle(.plain)
                         }
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -59,30 +67,34 @@ struct OfferDetailScreen: View {
                     copySection(title: "Koşullar", text: offer.terms)
 
                     VStack(spacing: 12) {
-                        NavigationLink {
-                            ClaimQRCodeScreen(offer: offer)
+                        Button {
+                            appState.claimOffer(offer.id)
+                            isShowingClaimCode = true
                         } label: {
-                            Text("Fırsatı Yakala")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 54)
-                                .foregroundStyle(.white)
-                                .background(YakalaTheme.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            HStack(spacing: 8) {
+                                Image(systemName: appState.isOfferClaimed(offer.id) ? "checkmark.seal.fill" : "qrcode")
+                                Text(appState.isOfferClaimed(offer.id) ? "Kodu Görüntüle" : "Fırsatı Yakala")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .foregroundStyle(.white)
+                            .background(appState.isOfferClaimed(offer.id) ? YakalaTheme.success : YakalaTheme.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
+                        .buttonStyle(.plain)
 
-                        SecondaryButton(title: "Yol Tarifi Al", icon: "arrow.triangle.turn.up.right.diamond.fill") {}
+                        SecondaryButton(title: "Yol Tarifi Al", icon: "arrow.triangle.turn.up.right.diamond.fill") {
+                            appState.recordDirectionClick(offer.id)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderView(title: "Benzer Fırsatlar", actionTitle: nil)
-                        ForEach(MockData.offers.filter { $0.category == offer.category && $0.id != offer.id }.prefix(3)) { similar in
-                            NavigationLink {
-                                OfferDetailScreen(offer: similar)
-                            } label: {
-                                OfferCardView(offer: similar)
+                        ForEach(appState.customerVisibleOffers().filter { $0.category.id == offer.category.id && $0.id != offer.id }.prefix(3)) { similar in
+                            OfferCardView(offer: similar) {
+                                selectedSimilarOffer = similar
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -91,6 +103,15 @@ struct OfferDetailScreen: View {
         }
         .navigationTitle("Fırsat Detayı")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $isShowingClaimCode) {
+            ClaimQRCodeScreen(offer: offer)
+        }
+        .navigationDestination(item: $selectedSimilarOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
+        .onAppear {
+            appState.recordOfferView(offer.id)
+        }
     }
 
     private var infoGrid: some View {
@@ -224,5 +245,5 @@ private struct QRPlaceholder: View {
     NavigationStack {
         OfferDetailScreen(offer: MockData.offers[0])
     }
+    .environmentObject(AppState())
 }
-

@@ -219,18 +219,14 @@ struct PlaceholderImageView: View {
 struct OfferCardView: View {
     var offer: Offer
     var action: (() -> Void)?
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        Group {
-            if let action {
-                Button(action: action) {
-                    cardContent
-                }
-                .buttonStyle(.plain)
-            } else {
-                cardContent
+        cardContent
+            .contentShape(Rectangle())
+            .onTapGesture {
+                action?()
             }
-        }
     }
 
     private var cardContent: some View {
@@ -250,9 +246,15 @@ struct OfferCardView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 8)
-                    Image(systemName: offer.isSaved ? "heart.fill" : "heart")
-                        .font(.headline)
-                        .foregroundStyle(offer.isSaved ? YakalaTheme.primary : YakalaTheme.textSecondary)
+                    Button {
+                        appState.toggleSavedOffer(offer.id)
+                    } label: {
+                        Image(systemName: appState.isOfferSaved(offer.id) ? "heart.fill" : "heart")
+                            .font(.headline)
+                            .foregroundStyle(appState.isOfferSaved(offer.id) ? YakalaTheme.primary : YakalaTheme.textSecondary)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Text(offer.business.name)
@@ -283,6 +285,8 @@ struct OfferCardView: View {
 
 struct FeaturedOfferCardView: View {
     var offer: Offer
+    var action: (() -> Void)?
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -292,20 +296,25 @@ struct FeaturedOfferCardView: View {
                         .padding(12)
                 }
                 .overlay(alignment: .topTrailing) {
-                    Image(systemName: offer.isSaved ? "heart.fill" : "heart")
-                        .font(.headline)
-                        .foregroundStyle(offer.isSaved ? YakalaTheme.primary : YakalaTheme.textPrimary)
-                        .frame(width: 38, height: 38)
-                        .background(.white.opacity(0.92))
-                        .clipShape(Circle())
-                        .padding(12)
+                    Button {
+                        appState.toggleSavedOffer(offer.id)
+                    } label: {
+                        Image(systemName: appState.isOfferSaved(offer.id) ? "heart.fill" : "heart")
+                            .font(.headline)
+                            .foregroundStyle(appState.isOfferSaved(offer.id) ? YakalaTheme.primary : YakalaTheme.textPrimary)
+                            .frame(width: 38, height: 38)
+                            .background(.white.opacity(0.92))
+                            .clipShape(Circle())
+                            .padding(12)
+                    }
+                    .buttonStyle(.plain)
                 }
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(offer.title)
                     .font(.headline)
                     .foregroundStyle(YakalaTheme.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 Text(offer.business.name)
                     .font(.subheadline)
                     .foregroundStyle(YakalaTheme.textSecondary)
@@ -321,11 +330,16 @@ struct FeaturedOfferCardView: View {
         .padding(12)
         .frame(width: 280)
         .yakalaCardStyle()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            action?()
+        }
     }
 }
 
 struct BusinessCardView: View {
     var business: Business
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         HStack(spacing: 12) {
@@ -346,9 +360,9 @@ struct BusinessCardView: View {
                 .foregroundStyle(YakalaTheme.textSecondary)
             }
             Spacer()
-            Image(systemName: business.isFollowed ? "checkmark.circle.fill" : "plus.circle")
+            Image(systemName: appState.isBusinessFollowed(business.id) ? "checkmark.circle.fill" : "plus.circle")
                 .font(.title3)
-                .foregroundStyle(business.isFollowed ? YakalaTheme.success : YakalaTheme.primary)
+                .foregroundStyle(appState.isBusinessFollowed(business.id) ? YakalaTheme.success : YakalaTheme.primary)
         }
         .padding(12)
         .yakalaCardStyle()
@@ -534,10 +548,12 @@ struct BottomSheetOfferPreviewView: View {
     OfferCardView(offer: MockData.offers[0])
         .padding()
         .background(YakalaTheme.surface)
+        .environmentObject(AppState())
 }
 
 #Preview("Featured") {
     FeaturedOfferCardView(offer: MockData.offers[1])
         .padding()
         .background(YakalaTheme.surface)
+        .environmentObject(AppState())
 }

@@ -14,29 +14,30 @@ struct SplashScreen: View {
         ScreenContainer {
             VStack(spacing: 22) {
                 Spacer()
-                YakalaLogoView(size: 250)
-                VStack(spacing: 8) {
-                    Text("Yakala")
-                        .font(.system(size: 42, weight: .black, design: .rounded))
-                        .foregroundStyle(YakalaTheme.textPrimary)
-                    Text("Yakındaki fırsatları yakala")
-                        .font(.headline)
-                        .foregroundStyle(YakalaTheme.textSecondary)
-                }
+                YakalaLogoView(size: 300)
+//                VStack(spacing: 8) {
+//                    Text("Yakala")
+//                        .font(.system(size: 42, weight: .black, design: .rounded))
+//                        .foregroundStyle(YakalaTheme.textPrimary)
+//                    Text("Yakındaki fırsatları yakala")
+//                        .font(.headline)
+//                        .foregroundStyle(YakalaTheme.textSecondary)
+//                }
                 Spacer()
-                PrimaryButton(title: "Başla", icon: "arrow.right") {
-                    onContinue()
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 18)
+//                PrimaryButton(title: "Başla", icon: "arrow.right") {
+//                    onContinue()
+//                }
+//                .padding(.horizontal, 24)
+//                .padding(.bottom, 18)
             }
         }
     }
 }
 
 struct OnboardingScreen: View {
-    var onSkip: () -> Void
-    var onFinish: () -> Void
+    var onSkip: () -> Void = {}
+    var onFinish: () -> Void = {}
+    @EnvironmentObject private var appState: AppState
     @State private var page = 0
 
     private let pages = [
@@ -52,6 +53,7 @@ struct OnboardingScreen: View {
                     YakalaLogoView(size: 60)
                     Spacer()
                     Button("Skip") {
+                        appState.completeOnboarding()
                         onSkip()
                     }
                     .font(.subheadline.weight(.semibold))
@@ -95,6 +97,7 @@ struct OnboardingScreen: View {
                 VStack(spacing: 12) {
                     PrimaryButton(title: page == pages.count - 1 ? "Get Started" : "Next", icon: "arrow.right") {
                         if page == pages.count - 1 {
+                            appState.completeOnboarding()
                             onFinish()
                         } else {
                             withAnimation {
@@ -104,6 +107,7 @@ struct OnboardingScreen: View {
                     }
 
                     SecondaryButton(title: "Girişe Geç") {
+                        appState.completeOnboarding()
                         onSkip()
                     }
                 }
@@ -120,5 +124,5 @@ struct OnboardingScreen: View {
 
 #Preview("Onboarding") {
     OnboardingScreen(onSkip: {}, onFinish: {})
+        .environmentObject(AppState())
 }
-

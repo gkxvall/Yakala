@@ -2,9 +2,11 @@ import SwiftUI
 
 struct BusinessProfileScreen: View {
     var business: Business
+    @EnvironmentObject private var appState: AppState
+    @State private var selectedOffer: Offer?
 
     private var activeOffers: [Offer] {
-        MockData.offers.filter { $0.business.id == business.id && $0.status == .active }
+        appState.customerVisibleOffers().filter { $0.business.id == business.id && $0.status == .active }
     }
 
     var body: some View {
@@ -33,7 +35,12 @@ struct BusinessProfileScreen: View {
                     }
 
                     HStack(spacing: 12) {
-                        PrimaryButton(title: business.isFollowed ? "Takip Ediliyor" : "Takip Et", icon: business.isFollowed ? "checkmark" : "plus") {}
+                        PrimaryButton(
+                            title: appState.isBusinessFollowed(business.id) ? "Takip Ediliyor" : "Takip Et",
+                            icon: appState.isBusinessFollowed(business.id) ? "checkmark" : "plus"
+                        ) {
+                            appState.toggleFollowBusiness(business.id)
+                        }
                         SecondaryButton(title: "Ara", icon: "phone.fill") {}
                     }
 
@@ -58,12 +65,9 @@ struct BusinessProfileScreen: View {
                             EmptyStateView(icon: "tag", title: "Aktif fırsat yok", message: "Bu işletme yeni fırsat yayınladığında burada görünecek.")
                         } else {
                             ForEach(activeOffers) { offer in
-                                NavigationLink {
-                                    OfferDetailScreen(offer: offer)
-                                } label: {
-                                    OfferCardView(offer: offer)
+                                OfferCardView(offer: offer) {
+                                    selectedOffer = offer
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -73,6 +77,9 @@ struct BusinessProfileScreen: View {
         }
         .navigationTitle("İşletme")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
     }
 }
 
@@ -127,6 +134,7 @@ struct NotificationsScreen: View {
 
 struct UserProfileScreen: View {
     var onOpenBusinessFlow: () -> Void
+    @EnvironmentObject private var appState: AppState
     private let user = MockData.user
 
     var body: some View {
@@ -150,9 +158,9 @@ struct UserProfileScreen: View {
                     .yakalaCardStyle()
 
                     HStack(spacing: 12) {
-                        StatCardView(title: "Saved", value: "\(user.savedOffersCount)", icon: "heart.fill")
-                        StatCardView(title: "Claimed", value: "\(user.claimedOffersCount)", icon: "qrcode")
-                        StatCardView(title: "Following", value: "\(user.followedBusinessesCount)", icon: "storefront.fill")
+                        StatCardView(title: "Saved", value: "\(appState.savedOfferIds.count)", icon: "heart.fill")
+                        StatCardView(title: "Claimed", value: "\(appState.claimedOfferIds.count)", icon: "qrcode")
+                        StatCardView(title: "Following", value: "\(appState.followedBusinessIds.count)", icon: "storefront.fill")
                     }
 
                     VStack(spacing: 10) {
@@ -177,7 +185,12 @@ struct UserProfileScreen: View {
                             SettingsRow(icon: "briefcase.fill", title: "Business Dashboard")
                         }
                         .buttonStyle(.plain)
-                        SettingsRow(icon: "rectangle.portrait.and.arrow.right", title: "Logout", tint: YakalaTheme.primary)
+                        Button {
+                            appState.logout()
+                        } label: {
+                            SettingsRow(icon: "rectangle.portrait.and.arrow.right", title: "Logout", tint: YakalaTheme.primary)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(12)
                     .yakalaCardStyle()
@@ -191,6 +204,7 @@ struct UserProfileScreen: View {
 }
 
 struct SettingsScreen: View {
+    @EnvironmentObject private var appState: AppState
     @State private var push = true
     @State private var nearby = true
     @State private var endingSoon = true
@@ -208,6 +222,19 @@ struct SettingsScreen: View {
                     ToggleRowView(title: "Student deals", subtitle: "Öğrenci indirimleri", isOn: $studentDeals)
                     ToggleRowView(title: "Location usage", subtitle: "Mesafe ve harita deneyimi", isOn: $location)
                     ToggleRowView(title: "Dark mode placeholder", subtitle: "Gelecek tema desteği", isOn: $darkMode)
+                    Button {
+                        appState.resetDemoData()
+                    } label: {
+                        Label("Reset Demo Data", systemImage: "arrow.counterclockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .foregroundStyle(YakalaTheme.primary)
+                            .background(YakalaTheme.primaryLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
                 }
                 .padding(24)
             }
@@ -267,10 +294,13 @@ private struct SettingsRow: View {
     NavigationStack {
         UserProfileScreen(onOpenBusinessFlow: {})
     }
+    .environmentObject(AppState())
+    .environmentObject(LocationManager())
 }
 
 #Preview("Business Profile") {
     NavigationStack {
         BusinessProfileScreen(business: MockData.businesses[0])
     }
+    .environmentObject(AppState())
 }

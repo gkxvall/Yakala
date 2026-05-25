@@ -1,29 +1,25 @@
 import SwiftUI
 
 struct SavedOffersScreen: View {
-    @State private var showEmptyState = false
+    @EnvironmentObject private var appState: AppState
+    @State private var selectedOffer: Offer?
 
     private var savedOffers: [Offer] {
-        showEmptyState ? [] : MockData.offers.filter(\.isSaved)
+        appState.customerVisibleOffers().filter { appState.isOfferSaved($0.id) }
     }
 
     var body: some View {
         ScreenContainer {
             ScrollView {
                 VStack(spacing: 18) {
-                    ToggleRowView(title: "Boş durumu göster", subtitle: "UI kontrolü için mock state", isOn: $showEmptyState)
-
                     if savedOffers.isEmpty {
                         EmptyStateView(icon: "heart", title: "Henüz fırsat kaydetmedin.", message: "Beğendiğin fırsatları kaydedip daha sonra buradan hızlıca bulabilirsin.")
                     } else {
                         LazyVStack(spacing: 14) {
                             ForEach(savedOffers) { offer in
-                                NavigationLink {
-                                    OfferDetailScreen(offer: offer)
-                                } label: {
-                                    OfferCardView(offer: offer)
+                                OfferCardView(offer: offer) {
+                                    selectedOffer = offer
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -33,6 +29,9 @@ struct SavedOffersScreen: View {
         }
         .navigationTitle("Saved")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
     }
 }
 
@@ -40,5 +39,5 @@ struct SavedOffersScreen: View {
     NavigationStack {
         SavedOffersScreen()
     }
+    .environmentObject(AppState())
 }
-

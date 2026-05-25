@@ -2,6 +2,7 @@ import MapKit
 import SwiftUI
 
 struct MapScreen: View {
+    @EnvironmentObject private var appState: AppState
     @State private var searchText = ""
     @State private var position: MapCameraPosition = .region(
         MKCoordinateRegion(
@@ -10,10 +11,20 @@ struct MapScreen: View {
         )
     )
 
+    private var offers: [Offer] {
+        let allOffers = appState.customerVisibleOffers()
+        guard !searchText.isEmpty else { return Array(allOffers.prefix(10)) }
+        return allOffers.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.business.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.category.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $position) {
-                ForEach(MockData.offers.prefix(10)) { offer in
+                ForEach(offers.prefix(10)) { offer in
                     Annotation(offer.discountText, coordinate: CLLocationCoordinate2D(latitude: offer.business.latitude, longitude: offer.business.longitude)) {
                         NavigationLink {
                             OfferDetailScreen(offer: offer)
@@ -60,7 +71,7 @@ struct MapScreen: View {
                 }
                 .padding(.horizontal, 18)
 
-                BottomSheetOfferPreviewView(offers: Array(MockData.offers.prefix(6)))
+                BottomSheetOfferPreviewView(offers: Array(offers.prefix(6)))
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
             }
@@ -92,5 +103,5 @@ private struct IconCircleButton: View {
     NavigationStack {
         MapScreen()
     }
+    .environmentObject(AppState())
 }
-

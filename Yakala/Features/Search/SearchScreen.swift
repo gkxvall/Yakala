@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct SearchScreen: View {
+    @EnvironmentObject private var appState: AppState
     @State private var query = ""
+    @State private var selectedOffer: Offer?
     private let recentSearches = ["Burger", "Kahve", "Öğrenci indirimi", "Spor"]
 
     private var results: [Offer] {
-        guard !query.isEmpty else { return MockData.offers.prefix(6).map { $0 } }
-        return MockData.offers.filter {
+        guard !query.isEmpty else { return appState.customerVisibleOffers().prefix(6).map { $0 } }
+        return appState.customerVisibleOffers().filter {
             $0.title.localizedCaseInsensitiveContains(query) ||
             $0.business.name.localizedCaseInsensitiveContains(query) ||
             $0.category.name.localizedCaseInsensitiveContains(query)
@@ -60,12 +62,9 @@ struct SearchScreen: View {
                         } else {
                             LazyVStack(spacing: 14) {
                                 ForEach(results) { offer in
-                                    NavigationLink {
-                                        OfferDetailScreen(offer: offer)
-                                    } label: {
-                                        OfferCardView(offer: offer)
+                                    OfferCardView(offer: offer) {
+                                        selectedOffer = offer
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -76,6 +75,9 @@ struct SearchScreen: View {
         }
         .navigationTitle("Search")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
     }
 }
 
@@ -118,5 +120,5 @@ private struct FlowLayout<Data: RandomAccessCollection, Content: View>: View whe
     NavigationStack {
         SearchScreen()
     }
+    .environmentObject(AppState())
 }
-

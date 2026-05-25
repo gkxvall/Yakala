@@ -9,9 +9,14 @@ import SwiftUI
 
 @main
 struct YakalaApp: App {
+    @StateObject private var appState = AppState()
+    @StateObject private var locationManager = LocationManager()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(appState)
+                .environmentObject(locationManager)
         }
     }
 }

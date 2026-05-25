@@ -3,6 +3,7 @@ import SwiftUI
 struct LoginScreen: View {
     var onLogin: () -> Void
     var onBusinessLogin: () -> Void
+    @EnvironmentObject private var appState: AppState
     @State private var email = "mert@yakala.app"
     @State private var password = ""
 
@@ -37,6 +38,7 @@ struct LoginScreen: View {
                             }
 
                             PrimaryButton(title: "Giriş Yap") {
+                                appState.login(as: .customer)
                                 onLogin()
                             }
                         }
@@ -72,6 +74,7 @@ struct LoginScreen: View {
 
 struct RegisterScreen: View {
     var onRegister: () -> Void
+    @EnvironmentObject private var appState: AppState
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
@@ -87,6 +90,7 @@ struct RegisterScreen: View {
                     FormInputView(title: "E-posta", placeholder: "ornek@mail.com", text: $email)
                     SecureInputView(title: "Şifre", placeholder: "En az 8 karakter")
                     PrimaryButton(title: "Kayıt Ol") {
+                        appState.login(as: .customer)
                         onRegister()
                     }
                     SocialButton(title: "Apple ile Kayıt Ol", icon: "apple.logo")
@@ -122,7 +126,9 @@ struct ForgotPasswordScreen: View {
 }
 
 struct LocationPermissionScreen: View {
-    var onContinue: () -> Void
+    var onContinue: () -> Void = {}
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var locationManager: LocationManager
 
     var body: some View {
         ScreenContainer {
@@ -150,9 +156,12 @@ struct LocationPermissionScreen: View {
                 Spacer()
                 VStack(spacing: 12) {
                     PrimaryButton(title: "Konumumu Kullan", icon: "location.fill") {
+                        locationManager.requestLocationPermission()
+                        appState.completeLocationStep()
                         onContinue()
                     }
                     SecondaryButton(title: "Şehir Seçerek Devam Et", icon: "building.2.fill") {
+                        appState.completeLocationStep()
                         onContinue()
                     }
                 }
@@ -163,8 +172,9 @@ struct LocationPermissionScreen: View {
 }
 
 struct PreferenceSelectionScreen: View {
-    var onContinue: () -> Void
-    @State private var selected = Set<Category>(MockData.categories.prefix(4))
+    var onContinue: () -> Void = {}
+    @EnvironmentObject private var appState: AppState
+    @State private var selected = Set<Category>()
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -202,12 +212,21 @@ struct PreferenceSelectionScreen: View {
                 }
 
                 PrimaryButton(title: "Devam Et", icon: "checkmark") {
+                    appState.selectPreferences(selected.map(\.id))
                     onContinue()
                 }
+                .disabled(selected.isEmpty)
+                .opacity(selected.isEmpty ? 0.45 : 1)
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
                 .background(YakalaTheme.surface)
+            }
+        }
+        .onAppear {
+            if selected.isEmpty {
+                let persistedIds = Set(appState.selectedPreferenceCategoryIds)
+                selected = Set(MockData.categories.filter { persistedIds.contains($0.id) })
             }
         }
     }
@@ -299,12 +318,16 @@ private struct PreferenceCard: View {
 
 #Preview("Login") {
     LoginScreen(onLogin: {}, onBusinessLogin: {})
+        .environmentObject(AppState())
 }
 
 #Preview("Location") {
     LocationPermissionScreen {}
+        .environmentObject(AppState())
+        .environmentObject(LocationManager())
 }
 
 #Preview("Preferences") {
     PreferenceSelectionScreen {}
+        .environmentObject(AppState())
 }

@@ -6,9 +6,6 @@ final class HomeViewModel: ObservableObject {
     @Published var selectedCategory: Category?
 
     let categories = MockData.categories
-    let featuredOffers = Array(MockData.offers.prefix(6))
-    let nearYouOffers = Array(MockData.offers.prefix(10))
-    let endingSoonOffers = MockData.offers.filter { ["45 dk", "2 saat", "5 saat", "8 saat", "Bu gece", "Bugün"].contains($0.expiresIn) }
 }
 
 struct MainUserTabView: View {
@@ -55,7 +52,33 @@ struct MainUserTabView: View {
 }
 
 struct HomeFeedScreen: View {
+    @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel = HomeViewModel()
+    @State private var selectedOffer: Offer?
+
+    private var filteredOffers: [Offer] {
+        appState.customerVisibleOffers().filter { offer in
+            let matchesCategory = viewModel.selectedCategory == nil || offer.category.id == viewModel.selectedCategory?.id
+            let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let matchesSearch = query.isEmpty ||
+                offer.title.localizedCaseInsensitiveContains(query) ||
+                offer.business.name.localizedCaseInsensitiveContains(query) ||
+                offer.category.name.localizedCaseInsensitiveContains(query)
+            return matchesCategory && matchesSearch
+        }
+    }
+
+    private var featuredOffers: [Offer] {
+        Array(filteredOffers.prefix(6))
+    }
+
+    private var nearYouOffers: [Offer] {
+        Array(filteredOffers.filter { $0.status == .active }.prefix(10))
+    }
+
+    private var endingSoonOffers: [Offer] {
+        filteredOffers.filter { ["45 dk", "2 saat", "5 saat", "8 saat", "Bu gece", "Bugün"].contains($0.expiresIn) }
+    }
 
     var body: some View {
         ScreenContainer {
@@ -80,29 +103,29 @@ struct HomeFeedScreen: View {
                         SectionHeaderView(title: "Öne Çıkanlar", actionTitle: "Tümü") {}
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 14) {
-                                ForEach(viewModel.featuredOffers) { offer in
-                                    NavigationLink {
-                                        OfferDetailScreen(offer: offer)
-                                    } label: {
-                                        FeaturedOfferCardView(offer: offer)
+                                ForEach(featuredOffers) { offer in
+                                    FeaturedOfferCardView(offer: offer) {
+                                        selectedOffer = offer
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.horizontal, 24)
-                            .padding(.vertical, 4)
+                            .padding(.bottom, 24)
                         }
                         .padding(.horizontal, -24)
                     }
 
-                    offerSection(title: "Near You", offers: viewModel.nearYouOffers)
-                    offerSection(title: "Ending Soon", offers: viewModel.endingSoonOffers)
+                    offerSection(title: "Near You", offers: nearYouOffers)
+                    offerSection(title: "Ending Soon", offers: endingSoonOffers)
                 }
                 .padding(24)
             }
         }
         //.navigationTitle("Yakala")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
     }
 
     private var header: some View {
@@ -140,12 +163,9 @@ struct HomeFeedScreen: View {
             SectionHeaderView(title: title, actionTitle: "Tümü") {}
             LazyVStack(spacing: 14) {
                 ForEach(offers) { offer in
-                    NavigationLink {
-                        OfferDetailScreen(offer: offer)
-                    } label: {
-                        OfferCardView(offer: offer)
+                    OfferCardView(offer: offer) {
+                        selectedOffer = offer
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -154,4 +174,6 @@ struct HomeFeedScreen: View {
 
 #Preview {
     MainUserTabView(onOpenBusinessFlow: {})
+        .environmentObject(AppState())
+        .environmentObject(LocationManager())
 }

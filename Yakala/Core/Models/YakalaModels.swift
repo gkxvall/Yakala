@@ -1,18 +1,15 @@
 import Foundation
 
-struct User: Identifiable, Hashable {
-    let id: UUID
+struct User: Identifiable, Hashable, Codable {
+    let id: String
     var name: String
     var email: String
     var city: String
-    var savedOffersCount: Int
-    var claimedOffersCount: Int
-    var followedBusinessesCount: Int
     var preferences: [Category]
 }
 
-struct Business: Identifiable, Hashable {
-    let id: UUID
+struct Business: Identifiable, Hashable, Codable {
+    let id: String
     var name: String
     var category: Category
     var distance: Double
@@ -21,13 +18,16 @@ struct Business: Identifiable, Hashable {
     var workingHours: String
     var phone: String
     var description: String
-    var isFollowed: Bool
     var latitude: Double
     var longitude: Double
 }
 
-struct Offer: Identifiable, Hashable {
-    let id: UUID
+extension Business {
+    var idString: String { id }
+}
+
+struct Offer: Identifiable, Hashable, Codable {
+    let id: String
     var title: String
     var business: Business
     var category: Category
@@ -40,7 +40,6 @@ struct Offer: Identifiable, Hashable {
     var validUntil: String
     var description: String
     var terms: String
-    var isSaved: Bool
     var status: OfferStatus
     var maxClaims: Int
     var claimedCount: Int
@@ -49,15 +48,23 @@ struct Offer: Identifiable, Hashable {
     var targetAudiences: [String]
 }
 
-struct Category: Identifiable, Hashable {
-    let id: UUID
+extension Offer {
+    var idString: String { id }
+}
+
+struct Category: Identifiable, Hashable, Codable {
+    let id: String
     var name: String
     var icon: String
     var tintHex: String
 }
 
-struct NotificationItem: Identifiable, Hashable {
-    let id: UUID
+extension Category {
+    var idString: String { id }
+}
+
+struct NotificationItem: Identifiable, Hashable, Codable {
+    let id: String
     var title: String
     var message: String
     var time: String
@@ -65,13 +72,13 @@ struct NotificationItem: Identifiable, Hashable {
     var kind: NotificationKind
 }
 
-enum NotificationKind: String, Hashable {
+enum NotificationKind: String, Hashable, Codable {
     case followedBusiness
     case endingSoon
     case nearbyRecommendation
 }
 
-struct BusinessAnalytics: Hashable {
+struct BusinessAnalytics: Hashable, Codable {
     var views: Int
     var claims: Int
     var saves: Int
@@ -83,22 +90,21 @@ struct BusinessAnalytics: Hashable {
     var bestPerformingOffers: [String]
 }
 
-struct AnalyticsPoint: Identifiable, Hashable {
-    let id = UUID()
+struct AnalyticsPoint: Identifiable, Hashable, Codable {
+    var id: String { label }
     var label: String
     var value: Int
 }
 
-enum OfferStatus: String, CaseIterable, Hashable {
+enum OfferStatus: String, CaseIterable, Hashable, Codable {
     case active = "Aktif"
     case scheduled = "Planlandı"
     case expired = "Süresi Doldu"
     case paused = "Duraklatıldı"
 }
 
-enum DiscountType: String, CaseIterable, Hashable {
+enum DiscountType: String, CaseIterable, Hashable, Codable {
     case percentage = "Yüzde"
     case fixedAmount = "Sabit Tutar"
     case buyOneGetOne = "Bir Alana Bir Bedava"
 }
-

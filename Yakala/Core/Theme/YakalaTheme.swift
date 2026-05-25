@@ -54,7 +54,7 @@ extension View {
         self
             .background(YakalaTheme.background)
             .clipShape(RoundedRectangle(cornerRadius: YakalaTheme.cardRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 8)
+            .shadow(color: .black.opacity(0.06), radius: 7, x: 0, y: 8)
     }
 
     func yakalaSurfaceStyle(cornerRadius: CGFloat = YakalaTheme.cornerRadius) -> some View {

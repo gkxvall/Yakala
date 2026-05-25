@@ -1,63 +1,79 @@
 import SwiftUI
 
-enum AppPhase {
-    case splash
-    case onboarding
-    case login
-    case location
-    case preferences
-    case userApp
-    case businessAuth
-    case businessApp
-}
-
 struct ContentView: View {
-    @State private var phase: AppPhase = .splash
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var locationManager: LocationManager
+    @State private var isShowingSplash = true
+    @State private var isShowingBusinessAuth = false
 
     var body: some View {
         Group {
-            switch phase {
-            case .splash:
+            if isShowingSplash {
                 SplashScreen {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        phase = .onboarding
-                    }
+                    finishSplash()
                 }
-            case .onboarding:
-                OnboardingScreen(
-                    onSkip: { phase = .login },
-                    onFinish: { phase = .login }
-                )
-            case .login:
-                LoginScreen(
-                    onLogin: { phase = .location },
-                    onBusinessLogin: { phase = .businessAuth }
-                )
-            case .location:
-                LocationPermissionScreen {
-                    phase = .preferences
+            } else if !appState.hasSeenOnboarding {
+                OnboardingScreen()
+            } else if !appState.isAuthenticated {
+                authFlow
+            } else if appState.selectedUserMode == .customer && !appState.hasCompletedLocationStep {
+                LocationPermissionScreen()
+            } else if appState.selectedUserMode == .customer && !appState.hasSelectedPreferences {
+                PreferenceSelectionScreen()
+            } else if appState.selectedUserMode == .customer {
+                MainUserTabView {
+                    isShowingBusinessAuth = true
+                    appState.logout()
                 }
-            case .preferences:
-                PreferenceSelectionScreen {
-                    phase = .userApp
+            } else {
+                BusinessDashboardTabView {
+                    appState.login(as: .customer)
                 }
-            case .userApp:
-                MainUserTabView(onOpenBusinessFlow: { phase = .businessAuth })
-            case .businessAuth:
-                BusinessAuthScreen(
-                    onAuthenticated: { phase = .businessApp },
-                    onBackToUser: { phase = .userApp }
-                )
-            case .businessApp:
-                BusinessDashboardTabView(onBackToUser: { phase = .userApp })
             }
         }
         .tint(YakalaTheme.primary)
         .preferredColorScheme(.light)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                finishSplash()
+            }
+        }
+    }
+
+    private var authFlow: some View {
+        Group {
+            if isShowingBusinessAuth {
+                BusinessAuthScreen(
+                    onAuthenticated: {
+                        isShowingBusinessAuth = false
+                        appState.login(as: .business)
+                    },
+                    onBackToUser: {
+                        isShowingBusinessAuth = false
+                    }
+                )
+            } else {
+                LoginScreen(
+                    onLogin: {
+                        appState.login(as: .customer)
+                    },
+                    onBusinessLogin: {
+                        isShowingBusinessAuth = true
+                    }
+                )
+            }
+        }
+    }
+
+    private func finishSplash() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            isShowingSplash = false
+        }
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AppState())
+        .environmentObject(LocationManager())
 }
-
