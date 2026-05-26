@@ -12,6 +12,7 @@ final class AppState: ObservableObject {
     @AppStorage("yakala.userEmail") private var storedUserEmail = MockData.user.email
     @AppStorage("yakala.selectedCity") private var storedSelectedCity = MockData.user.city
     @AppStorage("yakala.locationMode") private var storedLocationMode = LocationMode.manualCity.rawValue
+    @AppStorage("yakala.appearanceMode") private var storedAppearanceMode = AppearanceMode.system.rawValue
 
     @Published private(set) var selectedPreferenceCategoryIds: [String] {
         didSet { UserDefaultsCodableStore.save(selectedPreferenceCategoryIds, forKey: Keys.selectedPreferenceCategoryIds) }
@@ -121,6 +122,10 @@ final class AppState: ObservableObject {
         LocationMode(rawValue: storedLocationMode) ?? .manualCity
     }
 
+    var appearanceMode: AppearanceMode {
+        AppearanceMode(rawValue: storedAppearanceMode) ?? .system
+    }
+
     init() {
         selectedPreferenceCategoryIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.selectedPreferenceCategoryIds, defaultValue: [])
         savedOfferIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.savedOfferIds, defaultValue: [])
@@ -178,6 +183,11 @@ final class AppState: ObservableObject {
         storedHasCompletedLocationStep = true
     }
 
+    func setAppearanceMode(_ mode: AppearanceMode) {
+        objectWillChange.send()
+        storedAppearanceMode = mode.rawValue
+    }
+
     func selectPreferences(_ ids: [String]) {
         selectedPreferenceCategoryIds = ids
         objectWillChange.send()
@@ -201,7 +211,19 @@ final class AppState: ObservableObject {
         guard !claimedOfferIds.contains(offerId) else { return }
         claimedOfferIds.append(offerId)
         offerClaimCounts[offerId, default: 0] += 1
-        localClaimRecords.append(ClaimRecord(offerId: offerId, code: claimCode(for: offerId), claimedAt: Date()))
+        if localClaimRecords.contains(where: { $0.offerId == offerId }) { return }
+        let offer = customerVisibleOffers().first { $0.id == offerId }
+        localClaimRecords.append(
+            ClaimRecord(
+                id: "claim_\(offerId)_\(userEmail.lowercased().filter { $0.isLetter || $0.isNumber })",
+                offerId: offerId,
+                businessId: offer?.business.id ?? "",
+                userName: userName,
+                code: claimCode(for: offerId),
+                claimedAt: Date(),
+                status: .active
+            )
+        )
     }
 
     func isOfferClaimed(_ offerId: String) -> Bool {
@@ -380,6 +402,81 @@ final class AppState: ObservableObject {
         return "YAKALA-\(String(compact.suffix(6)))-2026"
     }
 
+    func claimRecord(for offerId: String) -> ClaimRecord? {
+        localClaimRecords.first { $0.offerId == offerId }
+    }
+
+    func validateClaimCode(_ code: String) -> ClaimValidationResult {
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard let record = localClaimRecords.first(where: { $0.code.uppercased() == normalized }) else {
+            return ClaimValidationResult(isValid: false, title: "Kod Geçersiz", message: "Bu koda ait yerel bir yakalama kaydı bulunamadı.", claimRecord: nil)
+        }
+        guard !deletedOfferIds.contains(record.offerId) else {
+            return ClaimValidationResult(isValid: false, title: "Kod Geçersiz", message: "Bu fırsat silinmiş.", claimRecord: record)
+        }
+        guard let offer = businessVisibleOffer(by: record.offerId) ?? customerVisibleOffers().first(where: { $0.id == record.offerId }) else {
+            return ClaimValidationResult(isValid: false, title: "Kod Geçersiz", message: "Fırsat bulunamadı.", claimRecord: record)
+        }
+        let status = visibleStatus(for: offer)
+        guard status != .paused else {
+            return ClaimValidationResult(isValid: false, title: "Kod Geçersiz", message: "Bu fırsat duraklatılmış.", claimRecord: record)
+        }
+        guard status != .expired else {
+            return ClaimValidationResult(isValid: false, title: "Kod Geçersiz", message: "Bu fırsatın süresi dolmuş.", claimRecord: record)
+        }
+        guard record.status != .redeemed else {
+            return ClaimValidationResult(isValid: false, title: "Kod Kullanılmış", message: "Bu kod daha önce kullanılmış.", claimRecord: record)
+        }
+        return ClaimValidationResult(isValid: true, title: "Kod Geçerli", message: "Bu kod kullanılabilir.", claimRecord: record)
+    }
+
+    func redeemClaim(code: String) -> ClaimValidationResult {
+        let result = validateClaimCode(code)
+        guard result.isValid, let record = result.claimRecord, let index = localClaimRecords.firstIndex(where: { $0.id == record.id }) else {
+            return result
+        }
+        localClaimRecords[index].redeemedAt = Date()
+        localClaimRecords[index].status = .redeemed
+        return ClaimValidationResult(isValid: true, title: "Fırsat Kullanıldı", message: "Kod başarıyla kullanıldı olarak işaretlendi.", claimRecord: localClaimRecords[index])
+    }
+
+    func userClaimHistory() -> [ClaimRecord] {
+        localClaimRecords.sorted { $0.claimedAt > $1.claimedAt }
+    }
+
+    func businessClaimHistory() -> [ClaimRecord] {
+        localClaimRecords
+            .filter { $0.businessId == currentBusinessProfile.id }
+            .sorted { $0.claimedAt > $1.claimedAt }
+    }
+
+    func redeemedClaimsForCurrentBusiness() -> [ClaimRecord] {
+        businessClaimHistory().filter { $0.status == .redeemed }
+    }
+
+    func activeClaimsForCurrentBusiness() -> [ClaimRecord] {
+        businessClaimHistory().filter { $0.status == .active }
+    }
+
+    func effectiveRedeemedCount(for offerId: String) -> Int {
+        localClaimRecords.filter { $0.offerId == offerId && $0.status == .redeemed }.count
+    }
+
+    @discardableResult
+    func duplicateOffer(_ offer: Offer) -> Offer {
+        var copy = offer
+        copy.id = "local_offer_\(UUID().uuidString)"
+        copy.title = "\(offer.title) Kopya"
+        copy.claimedCount = 0
+        copy.business = currentBusinessProfile
+        locallyCreatedOffers.insert(copy, at: 0)
+        return copy
+    }
+
+    func businessVisibleOffer(by id: String) -> Offer? {
+        allBusinessOffers().first { $0.id == id }
+    }
+
     func canClaimOffer(_ offer: Offer) -> Bool {
         visibleStatus(for: offer) == .active && effectiveClaimCount(for: offer) < offer.maxClaims
     }
@@ -408,7 +505,13 @@ final class AppState: ObservableObject {
             }
         }
         let fallback = items.isEmpty ? MockData.notifications : items + MockData.notifications
-        return fallback.filter { !hiddenNotificationIds.contains($0.id) }
+        return fallback.filter { item in
+            guard !hiddenNotificationIds.contains(item.id) else { return false }
+            if item.kind == .nearbyRecommendation && !notificationSettings.nearbyDealAlerts { return false }
+            if item.kind == .endingSoon && !notificationSettings.endingSoonAlerts { return false }
+            if item.message.localizedCaseInsensitiveContains("öğrenci") && !notificationSettings.studentDeals { return false }
+            return true
+        }
     }
 
     private func generatedNotificationIds() -> [String] {
@@ -443,6 +546,7 @@ final class AppState: ObservableObject {
         storedUserEmail = MockData.user.email
         storedSelectedCity = MockData.user.city
         storedLocationMode = LocationMode.manualCity.rawValue
+        storedAppearanceMode = AppearanceMode.system.rawValue
     }
 
     func resetAppStateForTesting() {

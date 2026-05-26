@@ -1,14 +1,17 @@
 import SwiftUI
+import UIKit
 
 enum YakalaTheme {
     static let primary = Color(hex: "#FF2A2F")
     static let primaryDark = Color(hex: "#D91F24")
-    static let primaryLight = Color(hex: "#FFE8E9")
-    static let background = Color(hex: "#FFFFFF")
-    static let surface = Color(hex: "#F8F8F8")
-    static let textPrimary = Color(hex: "#1C1C1E")
-    static let textSecondary = Color(hex: "#6B6B6B")
-    static let border = Color(hex: "#E5E5EA")
+    static let primaryLight = Color.dynamic(light: "#FFE8E9", dark: "#3A1114")
+    static let subtleRedBackground = Color.dynamic(light: "#FFE8E9", dark: "#2A0D0F")
+    static let background = Color.dynamic(light: "#FFFFFF", dark: "#111113")
+    static let surface = Color.dynamic(light: "#F8F8F8", dark: "#18181B")
+    static let card = Color.dynamic(light: "#FFFFFF", dark: "#202024")
+    static let textPrimary = Color.dynamic(light: "#1C1C1E", dark: "#F4F4F5")
+    static let textSecondary = Color.dynamic(light: "#6B6B6B", dark: "#A1A1AA")
+    static let border = Color.dynamic(light: "#E5E5EA", dark: "#34343A")
     static let success = Color(hex: "#22C55E")
     static let warning = Color(hex: "#F59E0B")
 
@@ -18,6 +21,12 @@ enum YakalaTheme {
 }
 
 extension Color {
+    static func dynamic(light: String, dark: String) -> Color {
+        Color(UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(Color(hex: dark)) : UIColor(Color(hex: light))
+        })
+    }
+
     init(hex: String) {
         let cleanedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -52,7 +61,7 @@ extension Color {
 extension View {
     func yakalaCardStyle() -> some View {
         self
-            .background(YakalaTheme.background)
+            .background(YakalaTheme.card)
             .clipShape(RoundedRectangle(cornerRadius: YakalaTheme.cardRadius, style: .continuous))
             .shadow(color: .black.opacity(0.06), radius: 7, x: 0, y: 8)
     }
@@ -63,4 +72,3 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
-

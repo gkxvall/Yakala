@@ -7,6 +7,7 @@ struct MapScreen: View {
     @State private var searchText = ""
     @State private var selectedCategory: Category?
     @State private var selectedStatus: OfferStatus?
+    @State private var savedOnly = false
     @State private var showingFilters = false
     @State private var selectedOffer: Offer?
     @State private var position: MapCameraPosition = .region(
@@ -19,7 +20,8 @@ struct MapScreen: View {
     private var offers: [Offer] {
         let allOffers = appState.customerVisibleOffers().filter { offer in
             (selectedCategory == nil || offer.category.id == selectedCategory?.id) &&
-            (selectedStatus == nil || appState.visibleStatus(for: offer) == selectedStatus)
+            (selectedStatus == nil || appState.visibleStatus(for: offer) == selectedStatus) &&
+            (!savedOnly || appState.isOfferSaved(offer.id))
         }
         guard !searchText.isEmpty else { return Array(allOffers.prefix(20)) }
         return allOffers.filter {
@@ -112,9 +114,13 @@ struct MapScreen: View {
                             Text("Planlandı").tag(OfferStatus?.some(.scheduled))
                         }
                     }
+                    Section("Kayıt") {
+                        Toggle("Sadece kaydedilenler", isOn: $savedOnly)
+                    }
                     Button("Filtreleri Temizle") {
                         selectedCategory = nil
                         selectedStatus = nil
+                        savedOnly = false
                     }
                 }
                 .navigationTitle("Harita Filtreleri")

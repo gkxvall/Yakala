@@ -19,6 +19,15 @@ struct SearchScreen: View {
         }
     }
 
+    private var businessResults: [Business] {
+        guard !query.isEmpty else { return [] }
+        return MockData.businesses.filter {
+            $0.name.localizedCaseInsensitiveContains(query) ||
+            $0.category.name.localizedCaseInsensitiveContains(query) ||
+            $0.address.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
         ScreenContainer {
             ScrollView {
@@ -85,6 +94,20 @@ struct SearchScreen: View {
                                         selectedOffer = offer
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    if !businessResults.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeaderView(title: "İşletmeler", actionTitle: "\(businessResults.count)")
+                            ForEach(businessResults) { business in
+                                NavigationLink {
+                                    BusinessProfileScreen(business: business)
+                                } label: {
+                                    BusinessCardView(business: business)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }

@@ -1,7 +1,7 @@
 import Foundation
 
 struct User: Identifiable, Hashable, Codable {
-    let id: String
+    var id: String
     var name: String
     var email: String
     var city: String
@@ -27,7 +27,7 @@ extension Business {
 }
 
 struct Offer: Identifiable, Hashable, Codable {
-    let id: String
+    var id: String
     var title: String
     var business: Business
     var category: Category

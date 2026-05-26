@@ -32,6 +32,7 @@ struct ContentView: View {
             }
         }
         .tint(YakalaTheme.primary)
+        .preferredColorScheme(colorScheme)
         .onAppear {
             guard isShowingSplash else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
@@ -69,6 +70,14 @@ struct ContentView: View {
         guard isShowingSplash else { return }
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
             isShowingSplash = false
+        }
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch appState.appearanceMode {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 }

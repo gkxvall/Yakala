@@ -188,12 +188,20 @@ struct ClaimQRCodeScreen: View {
         appState.claimCode(for: offer.id)
     }
 
+    private var claimRecord: ClaimRecord? {
+        appState.claimRecord(for: offer.id)
+    }
+
+    private var statusTitle: String {
+        claimRecord?.status.title ?? "Hazır"
+    }
+
     var body: some View {
         ScreenContainer {
             ScrollView {
                 VStack(spacing: 22) {
                     VStack(spacing: 10) {
-                        Text("Fırsat Hazır")
+                        Text(claimRecord?.status == .redeemed ? "Fırsat Kullanıldı" : "Fırsat Hazır")
                             .font(.largeTitle.bold())
                         Text("Bu kodu kasada göster")
                             .font(.headline)
@@ -217,8 +225,23 @@ struct ClaimQRCodeScreen: View {
 
                     HStack(spacing: 12) {
                         MiniInfoCard(title: "Süre", value: "Bugün geçerli", icon: "timer")
-                        MiniInfoCard(title: "Durum", value: appState.isOfferClaimed(offer.id) ? "Yakalandı" : "Hazır", icon: "checkmark.seal.fill")
+                        MiniInfoCard(title: "Durum", value: statusTitle, icon: "checkmark.seal.fill")
                     }
+
+                    if let redeemedAt = claimRecord?.redeemedAt {
+                        MiniInfoCard(title: "Kullanım", value: redeemedAt.formatted(date: .abbreviated, time: .shortened), icon: "checkmark.circle.fill")
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(offer.business.name)
+                            .font(.headline)
+                        Text(offer.business.address)
+                            .font(.subheadline)
+                            .foregroundStyle(YakalaTheme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .yakalaCardStyle()
 
                     HStack(spacing: 12) {
                         SecondaryButton(title: "Kodu Kopyala", icon: "doc.on.doc.fill") {
@@ -233,7 +256,7 @@ struct ClaimQRCodeScreen: View {
                         }
                     }
 
-                    Text("Kod tek kullanımlıktır. Bu ekran yerel demo amaçlıdır; gerçek doğrulama backend bağlandığında eklenecek.")
+                    Text("Bu kod işletme tarafından doğrulandığında kullanılmış sayılır.")
                         .font(.subheadline)
                         .foregroundStyle(YakalaTheme.textSecondary)
                         .multilineTextAlignment(.center)

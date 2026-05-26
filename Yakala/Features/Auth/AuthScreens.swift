@@ -190,7 +190,7 @@ struct LocationPermissionScreen: View {
     @State private var showCityPicker = false
     @State private var alert: AuthAlert?
 
-    private let cities = ["Kadıköy, İstanbul", "Beşiktaş, İstanbul", "Şişli, İstanbul", "Karşıyaka, İzmir", "Çankaya, Ankara", "Nilüfer, Bursa"]
+    private let cities = ["İstanbul", "Ankara", "İzmir", "Samsun", "Bursa", "Antalya", "Eskişehir", "Konya", "Trabzon"]
 
     var body: some View {
         ScreenContainer {

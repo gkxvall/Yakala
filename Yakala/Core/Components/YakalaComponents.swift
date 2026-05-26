@@ -162,8 +162,8 @@ struct DiscountBadgeView: View {
         Text(text)
             .font(compact ? .caption.weight(.black) : .headline.weight(.black))
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 8 : 12)
-            .padding(.vertical, compact ? 5 : 7)
+            .padding(.horizontal, compact ? 3 : 6)
+            .padding(.vertical, compact ? 2 : 4)
             .background(YakalaTheme.primary)
             .clipShape(RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous))
     }

@@ -23,16 +23,16 @@ enum MockData {
     )
 
     static let businesses: [Business] = [
-        business("business_nora_burger", "Nora Burger", 0, 0.4, 4.8, "Moda Cd. No:14, Kadıköy", "10:00 - 23:00", "Lezzetli burgerler ve günlük menüler.", 40.9844, 29.0262),
-        business("business_bean_co", "Bean & Co.", 1, 0.6, 4.7, "Bahariye Cd. No:32, Kadıköy", "08:00 - 22:00", "Üçüncü dalga kahve ve taze tatlılar.", 40.9871, 29.0284),
-        business("business_urban_wear", "Urban Wear", 2, 1.1, 4.5, "Bağdat Cd. No:210, Suadiye", "10:00 - 21:30", "Günlük giyim ve sezon koleksiyonları.", 40.9659, 29.0831),
-        business("business_teknopoint", "TeknoPoint", 3, 1.8, 4.4, "Rıhtım Cd. No:7, Kadıköy", "09:30 - 20:30", "Aksesuar, telefon ve akıllı cihaz ürünleri.", 40.9905, 29.0236),
-        business("business_glow_studio", "Glow Studio", 4, 0.9, 4.9, "Caferağa Mh. No:18", "11:00 - 20:00", "Bakım, cilt ve hızlı güzellik servisleri.", 40.9818, 29.0288),
-        business("business_fitlab", "FitLab", 5, 1.3, 4.6, "Fenerbahçe Mh. No:5", "07:00 - 23:00", "Grup dersleri, pilates ve fonksiyonel antrenman.", 40.9732, 29.0442),
-        business("business_taze_market", "Taze Market", 6, 0.3, 4.3, "Mühürdar Cd. No:3", "08:00 - 00:00", "Mahalle marketi, taze ürünler ve hızlı alışveriş.", 40.9867, 29.0251),
-        business("business_sahne_cep", "Sahne Cep", 7, 2.2, 4.6, "Kalamış Marina", "12:00 - 01:00", "Konser, stand-up ve özel etkinlik biletleri.", 40.9791, 29.0366),
-        business("business_campus_copy", "Campus Copy", 8, 0.7, 4.2, "Yeldeğirmeni No:44", "08:30 - 19:30", "Öğrenci baskı, kırtasiye ve fotokopi merkezi.", 40.9951, 29.0306),
-        business("business_casa_mini", "Casa Mini", 9, 1.6, 4.4, "Erenköy No:88", "10:00 - 20:00", "Ev dekorasyonu, küçük tasarım objeleri ve hediyeler.", 40.9712, 29.0711)
+        business("business_samsun_burger", "Atakum Burger", 0, 0.4, 4.8, "Adnan Menderes Blv. No:24, Atakum", "10:00 - 23:00", "Lezzetli burgerler ve günlük menüler.", 41.3336, 36.2747),
+        business("business_bean_co_samsun", "Bean & Co.", 1, 0.6, 4.7, "Çiftlik Cd. No:18, İlkadım", "08:00 - 22:00", "Üçüncü dalga kahve ve taze tatlılar.", 41.2914, 36.3310),
+        business("business_urban_wear_samsun", "Urban Wear", 2, 1.1, 4.5, "Mecidiye Cd. No:42, İlkadım", "10:00 - 21:30", "Günlük giyim ve sezon koleksiyonları.", 41.2929, 36.3346),
+        business("business_teknopoint_samsun", "TeknoPoint", 3, 1.8, 4.4, "Cumhuriyet Meydanı No:7, İlkadım", "09:30 - 20:30", "Aksesuar, telefon ve akıllı cihaz ürünleri.", 41.2908, 36.3335),
+        business("business_glow_studio_samsun", "Glow Studio", 4, 0.9, 4.9, "Körfez Mh. No:16, Atakum", "11:00 - 20:00", "Bakım, cilt ve hızlı güzellik servisleri.", 41.3375, 36.2712),
+        business("business_fitlab_samsun", "FitLab", 5, 1.3, 4.6, "Mimar Sinan Mh. No:11, Atakum", "07:00 - 23:00", "Grup dersleri, pilates ve fonksiyonel antrenman.", 41.3315, 36.2894),
+        business("business_taze_market_samsun", "Taze Market", 6, 0.3, 4.3, "İstiklal Cd. No:5, İlkadım", "08:00 - 00:00", "Mahalle marketi, taze ürünler ve hızlı alışveriş.", 41.2869, 36.3339),
+        business("business_sahne_cep_samsun", "Sahne Cep", 7, 2.2, 4.6, "Doğu Park Sahili, Canik", "12:00 - 01:00", "Konser, stand-up ve özel etkinlik biletleri.", 41.2936, 36.3658),
+        business("business_campus_copy_samsun", "Campus Copy", 8, 0.7, 4.2, "OMÜ Kurupelit Kampüsü No:44, Atakum", "08:30 - 19:30", "Öğrenci baskı, kırtasiye ve fotokopi merkezi.", 41.3684, 36.1932),
+        business("business_casa_mini_samsun", "Casa Mini", 9, 1.6, 4.4, "Piazza AVM Yakını No:88, Canik", "10:00 - 20:00", "Ev dekorasyonu, küçük tasarım objeleri ve hediyeler.", 41.2845, 36.3569)
     ]
 
     static let offers: [Offer] = [

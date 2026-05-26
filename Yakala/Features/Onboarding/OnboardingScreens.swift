@@ -14,15 +14,15 @@ struct SplashScreen: View {
         ScreenContainer {
             VStack(spacing: 22) {
                 Spacer()
-                YakalaLogoView(size: 150)
-                VStack(spacing: 8) {
-                    Text("Yakala")
-                        .font(.system(size: 42, weight: .black, design: .rounded))
-                        .foregroundStyle(YakalaTheme.textPrimary)
-                    Text("Yakındaki fırsatları yakala")
-                        .font(.headline)
-                        .foregroundStyle(YakalaTheme.textSecondary)
-                }
+                YakalaLogoView(size: 300)
+//                VStack(spacing: 8) {
+//                    Text("Yakala")
+//                        .font(.system(size: 42, weight: .black, design: .rounded))
+//                        .foregroundStyle(YakalaTheme.textPrimary)
+//                    Text("Yakındaki fırsatları yakala")
+//                        .font(.headline)
+//                        .foregroundStyle(YakalaTheme.textSecondary)
+//                }
                 Spacer()
             }
         }
@@ -66,7 +66,7 @@ struct OnboardingScreen: View {
                                  //   .fill(YakalaTheme.primaryLight)
                                 //    .frame(width: 190, height: 190)
                                 Image(systemName: item.symbol)
-                                    .font(.system(size: 78, weight: .semibold))
+                                    .font(.system(size: 88, weight: .semibold))
                                     .foregroundStyle(YakalaTheme.primary)
                             }
 
@@ -101,10 +101,10 @@ struct OnboardingScreen: View {
                         }
                     }
 
-                    SecondaryButton(title: "Girişe Geç") {
-                        appState.completeOnboarding()
-                        onSkip()
-                    }
+//                    SecondaryButton(title: "Girişe Geç") {
+//                        appState.completeOnboarding()
+//                        onSkip()
+//                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 22)

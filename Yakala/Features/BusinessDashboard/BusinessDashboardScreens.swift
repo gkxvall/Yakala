@@ -170,22 +170,26 @@ struct BusinessDashboardScreen: View {
                         }
                     }
 
-                    NavigationLink {
-                        CreateOfferScreen()
-                    } label: {
-                        Label("Yeni Fırsat Oluştur", systemImage: "plus.circle.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .foregroundStyle(.white)
-                            .background(YakalaTheme.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    ViewThatFits {
+                        HStack(spacing: 12) {
+                            createOfferButton
+                            qrScannerButton
+                        }
+                        VStack(spacing: 12) {
+                            createOfferButton
+                            qrScannerButton
+                        }
                     }
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatCardView(title: "Aktif fırsat", value: "\(appState.activeBusinessOffers().count)", icon: "tag.fill")
                         StatCardView(title: "Görüntülenme", value: compactCount(localViews + MockData.analytics.views), icon: "eye.fill", tint: .blue)
-                        StatCardView(title: "Yakalama", value: compactCount(localClaims + MockData.analytics.claims), icon: "qrcode", tint: YakalaTheme.success)
+                        NavigationLink {
+                            BusinessClaimsScreen()
+                        } label: {
+                            StatCardView(title: "Yakalama", value: compactCount(localClaims + MockData.analytics.claims), icon: "qrcode", tint: YakalaTheme.success)
+                        }
+                        .buttonStyle(.plain)
                         StatCardView(title: "Kaydetme", value: compactCount(localSaves + MockData.analytics.saves), icon: "heart.fill", tint: YakalaTheme.warning)
                     }
 
@@ -195,7 +199,12 @@ struct BusinessDashboardScreen: View {
                             EmptyStateView(icon: "tag", title: "Fırsat yok", message: "İlk fırsatını oluşturarak panele veri ekleyebilirsin.")
                         } else {
                             ForEach(appState.allBusinessOffers().prefix(4)) { offer in
-                                OfferManagementRow(offer: offer)
+                                NavigationLink {
+                                    BusinessOfferDetailScreen(offer: offer)
+                                } label: {
+                                    OfferManagementRow(offer: offer)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -221,6 +230,34 @@ struct BusinessDashboardScreen: View {
 
     private var localSaves: Int {
         appState.offerSaveCounts.values.reduce(0, +)
+    }
+
+    private var createOfferButton: some View {
+        NavigationLink {
+            CreateOfferScreen()
+        } label: {
+            Label("Yeni Fırsat Oluştur", systemImage: "plus.circle.fill")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .foregroundStyle(.white)
+                .background(YakalaTheme.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private var qrScannerButton: some View {
+        NavigationLink {
+            QRScannerScreen()
+        } label: {
+            Label("QR Kod Oku", systemImage: "qrcode.viewfinder")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .foregroundStyle(YakalaTheme.primary)
+                .background(YakalaTheme.primaryLight)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
     }
 
     private func compactCount(_ value: Int) -> String {
@@ -560,16 +597,21 @@ struct BusinessOffersManagementScreen: View {
                             EmptyStateView(icon: "tag", title: "Fırsat yok", message: "Bu durumda gösterilecek yerel fırsat bulunmuyor.")
                         } else {
                             ForEach(offers) { offer in
-                                OfferManagementRow(
-                                    offer: offer,
-                                    showActions: true,
-                                    onPause: {
-                                        appState.pauseOffer(offer.id)
-                                    },
-                                    onDelete: {
-                                        pendingDeleteOffer = offer
-                                    }
-                                )
+                                NavigationLink {
+                                    BusinessOfferDetailScreen(offer: offer)
+                                } label: {
+                                    OfferManagementRow(
+                                        offer: offer,
+                                        showActions: true,
+                                        onPause: {
+                                            appState.pauseOffer(offer.id)
+                                        },
+                                        onDelete: {
+                                            pendingDeleteOffer = offer
+                                        }
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -631,7 +673,12 @@ struct BusinessAnalyticsScreen: View {
                 VStack(alignment: .leading, spacing: 18) {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatCardView(title: "Görüntülenme", value: "\(localViews == 0 ? analytics.views : localViews)", icon: "eye.fill")
-                        StatCardView(title: "Yakalama", value: "\(localClaims == 0 ? analytics.claims : localClaims)", icon: "qrcode", tint: YakalaTheme.success)
+                        NavigationLink {
+                            BusinessClaimsScreen()
+                        } label: {
+                            StatCardView(title: "Yakalama", value: "\(localClaims == 0 ? analytics.claims : localClaims)", icon: "qrcode", tint: YakalaTheme.success)
+                        }
+                        .buttonStyle(.plain)
                         StatCardView(title: "Kaydetme oranı", value: String(format: "%.1f%%", saveRate), icon: "heart.fill", tint: YakalaTheme.warning)
                         StatCardView(title: "Yol tarifi", value: "\(localDirections == 0 ? analytics.directionClicks : localDirections)", icon: "arrow.triangle.turn.up.right.diamond.fill", tint: .blue)
                     }
@@ -683,6 +730,365 @@ struct BusinessAnalyticsScreen: View {
         }
         .navigationTitle("Analiz")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct QRScannerScreen: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var code = ""
+    @State private var result: ClaimValidationResult?
+
+    var body: some View {
+        ScreenContainer {
+            ScrollView {
+                VStack(spacing: 18) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 68, weight: .semibold))
+                            .foregroundStyle(YakalaTheme.primary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 190)
+                            .background(YakalaTheme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        Text("Kamera entegrasyonu sonraki sürümde eklenecek.")
+                            .font(.subheadline)
+                            .foregroundStyle(YakalaTheme.textSecondary)
+                    }
+
+                    FormInputView(title: "Manuel Kod", placeholder: "YAKALA-XXXXXX-2026", text: $code)
+                    PrimaryButton(title: "Kodu Doğrula", icon: "checkmark.seal.fill") {
+                        result = appState.validateClaimCode(code)
+                    }
+
+                    if let demo = appState.activeClaimsForCurrentBusiness().first {
+                        SecondaryButton(title: "Demo Kod Kullan", icon: "wand.and.stars") {
+                            code = demo.code
+                            result = appState.validateClaimCode(demo.code)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeaderView(title: "Aktif Kodlar", actionTitle: "\(appState.activeClaimsForCurrentBusiness().count)")
+                        if appState.activeClaimsForCurrentBusiness().isEmpty {
+                            EmptyStateView(icon: "qrcode", title: "Aktif kod yok", message: "Müşteriler fırsat yakaladığında kodlar burada görünür.")
+                        }
+                        ForEach(appState.activeClaimsForCurrentBusiness()) { record in
+                            ClaimBusinessRow(record: record) {
+                                result = appState.redeemClaim(code: record.code)
+                            }
+                        }
+                    }
+
+                    NavigationLink {
+                        BusinessClaimsScreen()
+                    } label: {
+                        SettingsLikeRow(icon: "list.bullet.rectangle", title: "Tüm Kod Geçmişi")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(24)
+            }
+        }
+        .navigationTitle("QR Kod Oku")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $result) { result in
+            ClaimValidationResultScreen(result: result)
+                .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+struct ClaimValidationResultScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    @State var result: ClaimValidationResult
+
+    private var offer: Offer? {
+        guard let offerId = result.claimRecord?.offerId else { return nil }
+        return appState.businessVisibleOffer(by: offerId) ?? appState.customerVisibleOffers().first { $0.id == offerId }
+    }
+
+    var body: some View {
+        ScreenContainer {
+            VStack(spacing: 18) {
+                Image(systemName: result.isValid ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 64, weight: .semibold))
+                    .foregroundStyle(result.isValid ? YakalaTheme.success : YakalaTheme.primary)
+                Text(result.title)
+                    .font(.largeTitle.bold())
+                Text(result.message)
+                    .font(.body)
+                    .foregroundStyle(YakalaTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+
+                if let record = result.claimRecord {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ProfileInfoLine(title: "Fırsat", value: offer?.title ?? record.offerId)
+                        ProfileInfoLine(title: "Kullanıcı", value: record.userName)
+                        ProfileInfoLine(title: "İşletme", value: offer?.business.name ?? appState.currentBusinessProfile.name)
+                        ProfileInfoLine(title: "Kod", value: record.code)
+                        ProfileInfoLine(title: "Yakalama", value: record.claimedAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    .padding(16)
+                    .yakalaCardStyle()
+                }
+
+                if result.isValid, let record = result.claimRecord, record.status != .redeemed {
+                    PrimaryButton(title: "Kullanıldı Olarak İşaretle", icon: "checkmark") {
+                        result = appState.redeemClaim(code: record.code)
+                    }
+                } else {
+                    PrimaryButton(title: result.isValid ? "Kapat" : "Tekrar Dene", icon: result.isValid ? "xmark" : "arrow.counterclockwise") {
+                        dismiss()
+                    }
+                }
+
+                SecondaryButton(title: "Kapat", icon: "xmark") {
+                    dismiss()
+                }
+            }
+            .padding(24)
+        }
+    }
+}
+
+struct BusinessClaimsScreen: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var filter: ClaimFilter = .active
+    @State private var result: ClaimValidationResult?
+
+    private var records: [ClaimRecord] {
+        switch filter {
+        case .active:
+            return appState.activeClaimsForCurrentBusiness()
+        case .redeemed:
+            return appState.redeemedClaimsForCurrentBusiness()
+        case .all:
+            return appState.businessClaimHistory()
+        }
+    }
+
+    var body: some View {
+        ScreenContainer {
+            VStack(spacing: 16) {
+                Picker("Kodlar", selection: $filter) {
+                    ForEach(ClaimFilter.allCases, id: \.self) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        if records.isEmpty {
+                            EmptyStateView(icon: "qrcode", title: "Kod yok", message: "Bu filtrede gösterilecek kod bulunmuyor.")
+                        }
+                        ForEach(records) { record in
+                            ClaimBusinessRow(record: record) {
+                                result = appState.redeemClaim(code: record.code)
+                            }
+                        }
+                    }
+                    .padding(24)
+                }
+            }
+        }
+        .navigationTitle("Kod Geçmişi")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $result) { result in
+            ClaimValidationResultScreen(result: result)
+        }
+    }
+}
+
+private enum ClaimFilter: CaseIterable {
+    case active
+    case redeemed
+    case all
+
+    var title: String {
+        switch self {
+        case .active: return "Aktif Kodlar"
+        case .redeemed: return "Kullanılmış"
+        case .all: return "Tümü"
+        }
+    }
+}
+
+private struct ClaimBusinessRow: View {
+    var record: ClaimRecord
+    var onRedeem: () -> Void
+    @EnvironmentObject private var appState: AppState
+
+    private var offer: Offer? {
+        appState.businessVisibleOffer(by: record.offerId) ?? appState.customerVisibleOffers().first { $0.id == record.offerId }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(record.code)
+                        .font(.headline.monospaced())
+                    Text(offer?.title ?? "Fırsat bulunamadı")
+                        .font(.subheadline)
+                        .foregroundStyle(YakalaTheme.textSecondary)
+                }
+                Spacer()
+                StatusPill(text: record.status.title, icon: "checkmark.seal.fill", tint: record.status == .redeemed ? YakalaTheme.success : YakalaTheme.primary)
+            }
+            ProfileInfoLine(title: "Kullanıcı", value: record.userName)
+            ProfileInfoLine(title: "Yakalama", value: record.claimedAt.formatted(date: .abbreviated, time: .shortened))
+            if let redeemedAt = record.redeemedAt {
+                ProfileInfoLine(title: "Kullanıldı", value: redeemedAt.formatted(date: .abbreviated, time: .shortened))
+            }
+            if record.status == .active {
+                SecondaryButton(title: "Kullanıldı İşaretle", icon: "checkmark") {
+                    onRedeem()
+                }
+            }
+        }
+        .padding(14)
+        .yakalaCardStyle()
+    }
+}
+
+struct BusinessOfferDetailScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    @State var offer: Offer
+    @State private var showDeleteConfirm = false
+    @State private var alert: BusinessAlert?
+
+    var body: some View {
+        ScreenContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(offer.title)
+                                .font(.largeTitle.bold())
+                            StatusPill(text: appState.visibleStatus(for: offer).rawValue, icon: "tag.fill", tint: YakalaTheme.primary)
+                        }
+                        Spacer()
+                        DiscountBadgeView(text: offer.discountText)
+                    }
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        StatCardView(title: "Yakalama", value: "\(appState.effectiveClaimCount(for: offer)) / \(offer.maxClaims)", icon: "qrcode")
+                        StatCardView(title: "Kullanıldı", value: "\(appState.effectiveRedeemedCount(for: offer.id))", icon: "checkmark.seal.fill", tint: YakalaTheme.success)
+                        StatCardView(title: "Görüntülenme", value: "\(appState.offerViewCounts[offer.id, default: 0])", icon: "eye.fill", tint: .blue)
+                        StatCardView(title: "Kaydetme", value: "\(appState.offerSaveCounts[offer.id, default: 0])", icon: "heart.fill", tint: YakalaTheme.warning)
+                        StatCardView(title: "Yol tarifi", value: "\(appState.directionClickCounts[offer.id, default: 0])", icon: "location.fill", tint: .blue)
+                    }
+
+                    detailSection("Açıklama", offer.description)
+                    detailSection("Koşullar", offer.terms)
+                    detailSection("Tarih", "\(offer.startsAt) - \(offer.endsAt)")
+                    detailSection("Hedef kitle", offer.targetAudiences.joined(separator: ", "))
+                    detailSection("İşletme", "\(offer.business.name)\n\(offer.business.address)")
+
+                    NavigationLink {
+                        CreateOfferScreen(editingOffer: offer)
+                    } label: {
+                        SettingsLikeRow(icon: "pencil", title: "Düzenle")
+                    }
+                    .buttonStyle(.plain)
+
+                    HStack {
+                        SecondaryButton(title: appState.visibleStatus(for: offer) == .paused ? "Sürdür" : "Duraklat", icon: appState.visibleStatus(for: offer) == .paused ? "play.fill" : "pause.fill") {
+                            appState.pauseOffer(offer.id)
+                            if let refreshed = appState.businessVisibleOffer(by: offer.id) { offer = refreshed }
+                        }
+                        SecondaryButton(title: "Kopyala", icon: "doc.on.doc.fill") {
+                            _ = appState.duplicateOffer(offer)
+                            alert = BusinessAlert(title: "Kopyalandı", message: "Fırsat kopyası oluşturuldu.")
+                        }
+                    }
+
+                    Button {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Sil", systemImage: "trash.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .foregroundStyle(YakalaTheme.primary)
+                            .background(YakalaTheme.primaryLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(24)
+            }
+        }
+        .navigationTitle("Fırsat Detayı")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Fırsat silinsin mi?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Sil", role: .destructive) {
+                appState.deleteOffer(offer.id)
+                dismiss()
+            }
+            Button("Vazgeç", role: .cancel) {}
+        }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
+    }
+
+    private func detailSection(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(YakalaTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .yakalaCardStyle()
+    }
+}
+
+private struct ProfileInfoLine: View {
+    var title: String
+    var value: String
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(YakalaTheme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(YakalaTheme.textPrimary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+private struct SettingsLikeRow: View {
+    var icon: String
+    var title: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(YakalaTheme.primary)
+                .frame(width: 30, height: 30)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(YakalaTheme.textPrimary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.bold())
+                .foregroundStyle(YakalaTheme.textSecondary)
+        }
+        .padding(14)
+        .yakalaCardStyle()
     }
 }
 
@@ -822,6 +1228,7 @@ private struct OfferManagementRow: View {
     var showActions = false
     var onPause: (() -> Void)?
     var onDelete: (() -> Void)?
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         VStack(spacing: 12) {
@@ -833,12 +1240,21 @@ private struct OfferManagementRow: View {
                         .font(.headline)
                         .foregroundStyle(YakalaTheme.textPrimary)
                         .lineLimit(2)
-                    Text("\(offer.claimedCount) kullanım · \(offer.status.rawValue)")
+                    HStack {
+                        Text("\(appState.effectiveClaimCount(for: offer)) kullanım")
+                        Text("·")
+                        Text("\(appState.effectiveRedeemedCount(for: offer.id)) kullanıldı")
+                        Text("·")
+                        Text("\(appState.offerViewCounts[offer.id, default: 0]) görüntüleme")
+                    }
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(YakalaTheme.textSecondary)
                 }
                 Spacer()
-                DiscountBadgeView(text: offer.discountText, compact: true)
+                VStack(alignment: .trailing, spacing: 6) {
+                    DiscountBadgeView(text: offer.discountText, compact: true)
+                    StatusPill(text: appState.visibleStatus(for: offer).rawValue, icon: "tag.fill", tint: YakalaTheme.primary)
+                }
             }
 
             if showActions {

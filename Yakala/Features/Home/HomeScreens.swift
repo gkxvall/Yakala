@@ -246,15 +246,37 @@ struct OfferListRoute: Identifiable, Hashable {
 struct OfferListScreen: View {
     var title: String
     var offers: [Offer]
+    @EnvironmentObject private var appState: AppState
     @State private var query = ""
+    @State private var selectedCategory: Category?
+    @State private var sortMode = OfferListSort.recommended
     @State private var selectedOffer: Offer?
 
     private var filteredOffers: [Offer] {
-        guard !query.isEmpty else { return offers }
-        return offers.filter {
-            $0.title.localizedCaseInsensitiveContains(query) ||
-            $0.business.name.localizedCaseInsensitiveContains(query) ||
-            $0.category.name.localizedCaseInsensitiveContains(query)
+        let filtered = offers.filter { offer in
+            let matchesCategory = selectedCategory == nil || offer.category.id == selectedCategory?.id
+            guard !query.isEmpty else { return matchesCategory }
+            return matchesCategory && (
+                offer.title.localizedCaseInsensitiveContains(query) ||
+                offer.business.name.localizedCaseInsensitiveContains(query) ||
+                offer.category.name.localizedCaseInsensitiveContains(query)
+            )
+        }
+        switch sortMode {
+        case .recommended:
+            let preferenceIds = Set(appState.selectedPreferenceCategoryIds)
+            return filtered.sorted { lhs, rhs in
+                let lp = preferenceIds.contains(lhs.category.id) ? 0 : 1
+                let rp = preferenceIds.contains(rhs.category.id) ? 0 : 1
+                if lp != rp { return lp < rp }
+                return lhs.distance < rhs.distance
+            }
+        case .nearest:
+            return filtered.sorted { $0.distance < $1.distance }
+        case .endingSoon:
+            return filtered.sorted { $0.expiresIn < $1.expiresIn }
+        case .newest:
+            return filtered
         }
     }
 
@@ -263,6 +285,28 @@ struct OfferListScreen: View {
             ScrollView {
                 VStack(spacing: 16) {
                     SearchBarView(text: $query, placeholder: "Bu listede ara")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            Button("Tümü") { selectedCategory = nil }
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(selectedCategory == nil ? .white : YakalaTheme.textPrimary)
+                                .padding(.horizontal, 14)
+                                .frame(height: 36)
+                                .background(selectedCategory == nil ? YakalaTheme.primary : YakalaTheme.card)
+                                .clipShape(Capsule())
+                            ForEach(MockData.categories) { category in
+                                CategoryChipView(category: category, isSelected: selectedCategory?.id == category.id) {
+                                    selectedCategory = selectedCategory?.id == category.id ? nil : category
+                                }
+                            }
+                        }
+                    }
+                    Picker("Sıralama", selection: $sortMode) {
+                        ForEach(OfferListSort.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                     if filteredOffers.isEmpty {
                         EmptyStateView(icon: "magnifyingglass", title: "Sonuç yok", message: "Farklı bir arama deneyebilirsin.")
                     } else {
@@ -282,6 +326,22 @@ struct OfferListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedOffer) { offer in
             OfferDetailScreen(offer: offer)
+        }
+    }
+}
+
+private enum OfferListSort: CaseIterable {
+    case recommended
+    case nearest
+    case endingSoon
+    case newest
+
+    var title: String {
+        switch self {
+        case .recommended: return "Önerilen"
+        case .nearest: return "Yakın"
+        case .endingSoon: return "Biten"
+        case .newest: return "Yeni"
         }
     }
 }

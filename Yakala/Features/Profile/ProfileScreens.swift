@@ -122,6 +122,8 @@ struct BusinessProfileScreen: View {
 
 struct NotificationsScreen: View {
     @EnvironmentObject private var appState: AppState
+    @State private var selectedOffer: Offer?
+    @State private var selectedBusiness: Business?
 
     private var notifications: [NotificationItem] {
         appState.generatedNotifications()
@@ -150,6 +152,7 @@ struct NotificationsScreen: View {
                     ForEach(notifications) { item in
                         Button {
                             appState.markNotificationRead(item.id)
+                            openNotification(item)
                         } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: item.icon)
@@ -187,6 +190,12 @@ struct NotificationsScreen: View {
         }
         .navigationTitle("Bildirimler")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            OfferDetailScreen(offer: offer)
+        }
+        .navigationDestination(item: $selectedBusiness) { business in
+            BusinessProfileScreen(business: business)
+        }
     }
 
     private func notificationTint(_ kind: NotificationKind) -> Color {
@@ -197,6 +206,16 @@ struct NotificationsScreen: View {
             return YakalaTheme.warning
         case .nearbyRecommendation:
             return YakalaTheme.success
+        }
+    }
+
+    private func openNotification(_ item: NotificationItem) {
+        if let offer = appState.customerVisibleOffers().first(where: { item.id.contains($0.id) || item.message.contains($0.title) }) {
+            selectedOffer = offer
+            return
+        }
+        if let business = MockData.businesses.first(where: { item.title.contains($0.name) || item.message.contains($0.name) }) {
+            selectedBusiness = business
         }
     }
 }
@@ -226,10 +245,28 @@ struct UserProfileScreen: View {
                     .frame(maxWidth: .infinity)
                     .padding(22)
                     .yakalaCardStyle()
+                    .overlay(alignment: .topTrailing) {
+                        NavigationLink {
+                            EditUserProfileScreen()
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.headline)
+                                .foregroundStyle(YakalaTheme.primary)
+                                .frame(width: 42, height: 42)
+                                .background(YakalaTheme.primaryLight)
+                                .clipShape(Circle())
+                                .padding(14)
+                        }
+                    }
 
                     HStack(spacing: 12) {
                         StatCardView(title: "Kaydedilenler", value: "\(appState.savedOfferIds.count)", icon: "heart.fill")
-                        StatCardView(title: "Yakalananlar", value: "\(appState.claimedOfferIds.count)", icon: "qrcode")
+                        NavigationLink {
+                            UserClaimHistoryScreen()
+                        } label: {
+                            StatCardView(title: "Yakalananlar", value: "\(appState.claimedOfferIds.count)", icon: "qrcode")
+                        }
+                        .buttonStyle(.plain)
                         StatCardView(title: "Takip", value: "\(appState.followedBusinessIds.count)", icon: "storefront.fill")
                     }
 
@@ -254,6 +291,11 @@ struct UserProfileScreen: View {
                         } label: {
                             SettingsRow(icon: "storefront.fill", title: "Takip Edilen İşletmeler")
                         }
+                        NavigationLink {
+                            UserClaimHistoryScreen()
+                        } label: {
+                            SettingsRow(icon: "qrcode", title: "Yakalanan Fırsatlarım")
+                        }
                         Button {
                             alert = ProfileAlert(title: "Yakında", message: "Dil seçenekleri sonraki sürümde eklenecek.")
                         } label: {
@@ -261,7 +303,7 @@ struct UserProfileScreen: View {
                         }
                         .buttonStyle(.plain)
                         NavigationLink {
-                            HelpScreen()
+                            HelpFAQScreen()
                         } label: {
                             SettingsRow(icon: "questionmark.circle.fill", title: "Yardım")
                         }
@@ -307,7 +349,25 @@ struct SettingsScreen: View {
                     ToggleRowView(title: "Bitmek üzere uyarıları", subtitle: "Süresi yaklaşan fırsatlar", isOn: notificationBinding(\.endingSoonAlerts))
                     ToggleRowView(title: "Öğrenci fırsatları", subtitle: "Öğrenci indirimlerini öne çıkar", isOn: notificationBinding(\.studentDeals))
                     ToggleRowView(title: "Konum kullanımı", subtitle: "Kapalıysa şehir seçimi kullanılır", isOn: notificationBinding(\.locationUsage))
-                    ToggleRowView(title: "Koyu mod yakında", subtitle: "Tema desteği sonraki sürümde", isOn: notificationBinding(\.darkModeComingSoon))
+                    NavigationLink {
+                        CitySelectionScreen()
+                    } label: {
+                        SettingsRow(icon: "building.2.fill", title: "Şehir: \(appState.selectedCity)")
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Görünüm")
+                            .font(.headline)
+                            .foregroundStyle(YakalaTheme.textPrimary)
+                        Picker("Görünüm", selection: appearanceBinding) {
+                            ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(14)
+                    .background(YakalaTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     Button {
                         showingResetConfirm = true
                     } label: {
@@ -344,6 +404,182 @@ struct SettingsScreen: View {
             appState.notificationSettings[keyPath: keyPath] = newValue
         }
     }
+
+    private var appearanceBinding: Binding<AppearanceMode> {
+        Binding {
+            appState.appearanceMode
+        } set: { mode in
+            appState.setAppearanceMode(mode)
+        }
+    }
+}
+
+struct EditUserProfileScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    @State private var name = ""
+    @State private var email = ""
+    @State private var city = ""
+    @State private var alert: ProfileAlert?
+
+    var body: some View {
+        ScreenContainer {
+            ScrollView {
+                VStack(spacing: 16) {
+                    FormInputView(title: "Ad Soyad", placeholder: "Adın", text: $name)
+                    FormInputView(title: "E-posta", placeholder: "ornek@mail.com", text: $email)
+                    FormInputView(title: "Şehir", placeholder: "İstanbul", text: $city)
+                    PrimaryButton(title: "Kaydet", icon: "checkmark") {
+                        save()
+                    }
+                }
+                .padding(24)
+            }
+        }
+        .navigationTitle("Profili Düzenle")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            name = appState.userName
+            email = appState.userEmail
+            city = appState.selectedCity
+        }
+        .alert(item: $alert) { item in
+            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("Tamam")))
+        }
+    }
+
+    private func save() {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            alert = ProfileAlert(title: "Ad gerekli", message: "Ad soyad alanı boş olamaz.")
+            return
+        }
+        guard email.contains("@") else {
+            alert = ProfileAlert(title: "E-posta hatalı", message: "Geçerli bir e-posta adresi gir.")
+            return
+        }
+        guard !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            alert = ProfileAlert(title: "Şehir gerekli", message: "Şehir alanı boş olamaz.")
+            return
+        }
+        appState.updateUserProfile(name: name, email: email, city: city)
+        dismiss()
+    }
+}
+
+struct CitySelectionScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
+    @State private var manualCity = ""
+
+    private let cities = ["İstanbul", "Ankara", "İzmir", "Samsun", "Bursa", "Antalya", "Eskişehir", "Konya", "Trabzon"]
+
+    var body: some View {
+        ScreenContainer {
+            List {
+                Section("Şehirler") {
+                    ForEach(cities, id: \.self) { city in
+                        Button {
+                            appState.updateSelectedCity(city)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(city)
+                                Spacer()
+                                if appState.selectedCity == city {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(YakalaTheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Diğer") {
+                    TextField("Şehir yaz", text: $manualCity)
+                    Button("Manuel şehri kaydet") {
+                        let trimmed = manualCity.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        appState.updateSelectedCity(trimmed)
+                        dismiss()
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(YakalaTheme.surface)
+        }
+        .navigationTitle("Şehir Seç")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct UserClaimHistoryScreen: View {
+    @EnvironmentObject private var appState: AppState
+    @State private var selectedOffer: Offer?
+
+    var body: some View {
+        ScreenContainer {
+            ScrollView {
+                LazyVStack(spacing: 14) {
+                    if appState.userClaimHistory().isEmpty {
+                        EmptyStateView(icon: "qrcode", title: "Henüz fırsat yakalamadın.", message: "Fırsatları yakaladığında kodların burada görünecek.")
+                    }
+                    ForEach(appState.userClaimHistory()) { record in
+                        if let offer = appState.customerVisibleOffers().first(where: { $0.id == record.offerId }) {
+                            ClaimHistoryRow(record: record, offer: offer) {
+                                selectedOffer = offer
+                            }
+                        }
+                    }
+                }
+                .padding(24)
+            }
+        }
+        .navigationTitle("Yakalanan Fırsatlarım")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedOffer) { offer in
+            ClaimQRCodeScreen(offer: offer)
+        }
+    }
+}
+
+private struct ClaimHistoryRow: View {
+    var record: ClaimRecord
+    var offer: Offer
+    var onShowCode: () -> Void
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(offer.title)
+                        .font(.headline)
+                    Text(offer.business.name)
+                        .font(.subheadline)
+                        .foregroundStyle(YakalaTheme.textSecondary)
+                }
+                Spacer()
+                StatusPill(text: record.status.title, icon: "checkmark.seal.fill", tint: record.status == .redeemed ? YakalaTheme.success : YakalaTheme.primary)
+            }
+            Text(record.code)
+                .font(.subheadline.monospaced().weight(.bold))
+            Text(record.claimedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption)
+                .foregroundStyle(YakalaTheme.textSecondary)
+            HStack {
+                SecondaryButton(title: "Kodu Görüntüle", icon: "qrcode") {
+                    onShowCode()
+                }
+                SecondaryButton(title: "Yol Tarifi Al", icon: "location.fill") {
+                    appState.recordDirectionClick(offer.id)
+                    let item = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: offer.business.latitude, longitude: offer.business.longitude)))
+                    item.name = offer.business.name
+                    _ = item.openInMaps()
+                }
+            }
+        }
+        .padding(14)
+        .yakalaCardStyle()
+    }
 }
 
 struct FollowedBusinessesScreen: View {
@@ -361,12 +597,30 @@ struct FollowedBusinessesScreen: View {
                         EmptyStateView(icon: "storefront", title: "Henüz takip yok", message: "Sevdiğin işletmeleri takip ettiğinde burada görünür.")
                     } else {
                         ForEach(businesses) { business in
-                            NavigationLink {
-                                BusinessProfileScreen(business: business)
-                            } label: {
-                                BusinessCardView(business: business)
+                            HStack(spacing: 12) {
+                                NavigationLink {
+                                    BusinessProfileScreen(business: business)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        BusinessCardView(business: business)
+                                        Text("\(activeOfferCount(for: business)) aktif fırsat")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(YakalaTheme.textSecondary)
+                                            .padding(.horizontal, 12)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                Button {
+                                    appState.toggleFollowBusiness(business.id)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .foregroundStyle(YakalaTheme.primary)
+                                        .frame(width: 36, height: 36)
+                                        .background(YakalaTheme.primaryLight)
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -376,16 +630,22 @@ struct FollowedBusinessesScreen: View {
         .navigationTitle("Takip Edilenler")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    private func activeOfferCount(for business: Business) -> Int {
+        appState.customerVisibleOffers().filter { $0.business.id == business.id && appState.visibleStatus(for: $0) == .active }.count
+    }
 }
 
-struct HelpScreen: View {
+struct HelpFAQScreen: View {
     var body: some View {
         ScreenContainer {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    HelpRow(title: "Yakala nasıl çalışır?", message: "Yakındaki yerel fırsatları listeler, kaydetmeni ve demo kod oluşturmanı sağlar.")
-                    HelpRow(title: "Kodlar gerçek mi?", message: "Şimdilik hayır. QR ve kampanya kodları yerel MVP demosudur.")
-                    HelpRow(title: "İşletme paneli ne yapar?", message: "Tek cihazda yerel olarak fırsat oluşturma, düzenleme, duraklatma ve silme deneyimini gösterir.")
+                    HelpRow(title: "Yakala nedir?", message: "Yakındaki yerel fırsatları listeler, kaydetmeni ve demo kod oluşturmanı sağlar.")
+                    HelpRow(title: "Fırsat nasıl yakalanır?", message: "Fırsat detayından kod oluşturabilir ve işletmeye gösterebilirsin.")
+                    HelpRow(title: "İşletmeler QR kodu nasıl doğrular?", message: "İşletme panelindeki QR Kod Oku ekranında kod manuel olarak doğrulanır.")
+                    HelpRow(title: "Konum verisi nasıl kullanılır?", message: "Bu demo gerçek konumu isteyebilir ama şehir seçimiyle de çalışır.")
+                    HelpRow(title: "Demo sürümde neler gerçek değil?", message: "Kimlik doğrulama, ödeme, QR doğrulama ve görsel yükleme backend bağlı değildir.")
                     HelpRow(title: "Demo iletişim", message: "destek@yakala.app")
                 }
                 .padding(24)
@@ -393,6 +653,12 @@ struct HelpScreen: View {
         }
         .navigationTitle("Yardım")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct HelpScreen: View {
+    var body: some View {
+        HelpFAQScreen()
     }
 }
 
