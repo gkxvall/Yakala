@@ -43,7 +43,6 @@ struct NotificationSettings: Codable, Hashable {
     var nearbyDealAlerts = true
     var endingSoonAlerts = true
     var studentDeals = false
-    var locationUsage = true
 }
 
 struct ClaimRecord: Identifiable, Codable, Hashable {

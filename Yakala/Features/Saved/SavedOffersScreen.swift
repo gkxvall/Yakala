@@ -17,7 +17,7 @@ struct SavedOffersScreen: View {
         case .nearest:
             return offers.sorted { $0.distance < $1.distance }
         case .endingSoon:
-            return offers.sorted { $0.expiresIn < $1.expiresIn }
+            return offers.sorted { appState.endingSoonRank(for: $0) < appState.endingSoonRank(for: $1) }
         case .newest:
             return offers
         }

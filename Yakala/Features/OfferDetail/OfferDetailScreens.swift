@@ -26,7 +26,7 @@ struct OfferDetailScreen: View {
                                     .font(.title3)
                                     .foregroundStyle(appState.isOfferSaved(offer.id) ? YakalaTheme.primary : YakalaTheme.textPrimary)
                                     .frame(width: 44, height: 44)
-                                    .background(.white.opacity(0.94))
+                                    .background(YakalaTheme.card.opacity(0.94))
                                     .clipShape(Circle())
                                     .padding(16)
                             }
@@ -93,7 +93,7 @@ struct OfferDetailScreen: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderView(title: "Benzer Fırsatlar", actionTitle: nil)
-                        ForEach(appState.customerVisibleOffers().filter { $0.category.id == offer.category.id && $0.id != offer.id && appState.visibleStatus(for: $0) == .active }.prefix(3)) { similar in
+                        ForEach(similarOffers.prefix(3)) { similar in
                             OfferCardView(offer: similar) {
                                 selectedSimilarOffer = similar
                             }
@@ -125,9 +125,10 @@ struct OfferDetailScreen: View {
     private var infoGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             MiniInfoCard(title: "Geçerlilik", value: offer.validUntil, icon: "calendar.badge.clock")
-            MiniInfoCard(title: "Kalan Süre", value: offer.expiresIn, icon: "clock.fill")
+            MiniInfoCard(title: "Kalan Süre", value: appState.remainingValidityText(for: offer), icon: "clock.fill")
             MiniInfoCard(title: "Kategori", value: offer.category.name, icon: offer.category.icon)
             MiniInfoCard(title: "Kullanım", value: "\(appState.effectiveClaimCount(for: offer))/\(offer.maxClaims)", icon: "qrcode")
+            MiniInfoCard(title: "Kullanıldı", value: "\(appState.effectiveRedeemedCount(for: offer.id))", icon: "checkmark.seal.fill")
         }
     }
 
@@ -151,13 +152,21 @@ struct OfferDetailScreen: View {
             return
         }
         guard appState.canClaimOffer(offer) else {
-            let status = appState.visibleStatus(for: offer)
-            let message = status == .active ? "Bu fırsat için kullanım limiti dolmuş görünüyor." : "Bu fırsat şu anda \(status.rawValue.lowercased())."
-            alert = OfferDetailAlert(title: "Fırsat kullanılamıyor", message: message)
+            alert = OfferDetailAlert(title: "Fırsat kullanılamıyor", message: appState.claimFailureMessage(for: offer))
             return
         }
         appState.claimOffer(offer.id)
         isShowingClaimCode = true
+    }
+
+    private var similarOffers: [Offer] {
+        var seen = Set<String>()
+        return appState.customerVisibleOffers().filter { candidate in
+            guard candidate.category.id == offer.category.id, candidate.id != offer.id else { return false }
+            guard appState.visibleStatus(for: candidate) == .active else { return false }
+            guard !appState.isOfferClaimLimitFull(candidate) else { return false }
+            return seen.insert(candidate.id).inserted
+        }
     }
 
     private func openDirections() {
@@ -224,8 +233,12 @@ struct ClaimQRCodeScreen: View {
                     OfferCardView(offer: offer)
 
                     HStack(spacing: 12) {
-                        MiniInfoCard(title: "Süre", value: "Bugün geçerli", icon: "timer")
+                        MiniInfoCard(title: "Süre", value: appState.remainingValidityText(for: offer), icon: "timer")
                         MiniInfoCard(title: "Durum", value: statusTitle, icon: "checkmark.seal.fill")
+                    }
+
+                    if appState.visibleStatus(for: offer) != .active {
+                        StatusPill(text: appState.claimFailureMessage(for: offer), icon: "exclamationmark.triangle.fill", tint: YakalaTheme.warning)
                     }
 
                     if let redeemedAt = claimRecord?.redeemedAt {
@@ -246,7 +259,7 @@ struct ClaimQRCodeScreen: View {
                     HStack(spacing: 12) {
                         SecondaryButton(title: "Kodu Kopyala", icon: "doc.on.doc.fill") {
                             UIPasteboard.general.string = claimCode
-                            alert = OfferDetailAlert(title: "Kopyalandı", message: "Fırsat kodu panoya kopyalandı.")
+                            alert = OfferDetailAlert(title: "Kopyalandı", message: claimRecord?.status == .redeemed ? "Kod panoya kopyalandı. Bu fırsat daha önce kullanılmış." : "Fırsat kodu panoya kopyalandı.")
                         }
                         SecondaryButton(title: "Yol Tarifi Al", icon: "location.fill") {
                             appState.recordDirectionClick(offer.id)
@@ -256,7 +269,7 @@ struct ClaimQRCodeScreen: View {
                         }
                     }
 
-                    Text("Bu kod işletme tarafından doğrulandığında kullanılmış sayılır.")
+                    Text("QR görünümü demo amaçlıdır; doğrulama kod üzerinden yapılır. Bu kod işletme tarafından doğrulandığında kullanılmış sayılır.")
                         .font(.subheadline)
                         .foregroundStyle(YakalaTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -320,7 +333,7 @@ private struct QRPlaceholder: View {
             }
         }
         .padding(20)
-        .background(.white)
+        .background(YakalaTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)

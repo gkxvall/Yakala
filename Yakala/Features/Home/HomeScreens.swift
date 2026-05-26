@@ -70,15 +70,31 @@ struct HomeFeedScreen: View {
     }
 
     private var featuredOffers: [Offer] {
-        Array(filteredOffers.filter { appState.visibleStatus(for: $0) == .active }.prefix(6))
+        let preferenceIds = Set(appState.selectedPreferenceCategoryIds)
+        return Array(filteredOffers
+            .filter { appState.visibleStatus(for: $0) == .active }
+            .sorted {
+                let lhsPreferred = preferenceIds.contains($0.category.id) ? 0 : 1
+                let rhsPreferred = preferenceIds.contains($1.category.id) ? 0 : 1
+                if lhsPreferred != rhsPreferred { return lhsPreferred < rhsPreferred }
+                return discountRank($0) > discountRank($1)
+            }
+            .prefix(6))
     }
 
     private var nearYouOffers: [Offer] {
-        Array(filteredOffers.filter { appState.visibleStatus(for: $0) == .active }.prefix(8))
+        let featuredIds = Set(featuredOffers.map(\.id))
+        return Array(filteredOffers
+            .filter { appState.visibleStatus(for: $0) == .active && !featuredIds.contains($0.id) }
+            .sorted { $0.distance < $1.distance }
+            .prefix(8))
     }
 
     private var endingSoonOffers: [Offer] {
-        filteredOffers.filter { appState.visibleStatus(for: $0) == .active && isEndingSoon($0) }
+        let usedIds = Set((featuredOffers + nearYouOffers).map(\.id))
+        return filteredOffers
+            .filter { appState.visibleStatus(for: $0) == .active && !usedIds.contains($0.id) && appState.endingSoonRank(for: $0) < 48 }
+            .sorted { appState.endingSoonRank(for: $0) < appState.endingSoonRank(for: $1) }
     }
 
     var body: some View {
@@ -98,6 +114,21 @@ struct HomeFeedScreen: View {
 
                     SearchBarView(text: $viewModel.searchText) {
                         appState.addRecentSearch(viewModel.searchText)
+                    }
+
+                    if appState.selectedPreferenceCategoryIds.isEmpty {
+                        NavigationLink {
+                            PreferenceSelectionScreen(isEditing: true)
+                        } label: {
+                            Label("İlgi alanlarını seçerek daha iyi öneriler al.", systemImage: "sparkles")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(YakalaTheme.textSecondary)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(YakalaTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -126,7 +157,7 @@ struct HomeFeedScreen: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeaderView(title: "Öne Çıkanlar", actionTitle: "Tümü") {
-                            selectedList = OfferListRoute(title: "Öne Çıkanlar", offers: featuredOffers)
+                            selectedList = OfferListRoute(title: "Öne Çıkanlar", kind: .featured)
                         }
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 14) {
@@ -143,7 +174,13 @@ struct HomeFeedScreen: View {
                     }
 
                     if filteredOffers.isEmpty {
-                        EmptyStateView(icon: "magnifyingglass", title: "Fırsat bulunamadı", message: "Filtreleri temizleyerek yakındaki fırsatları tekrar görebilirsin.")
+                        VStack(spacing: 12) {
+                            EmptyStateView(icon: "magnifyingglass", title: "Fırsat bulunamadı", message: activeOfferCount == 0 ? "Şu anda aktif fırsat yok. Harita veya arama ekranından demo veriyi keşfedebilirsin." : "Filtreleri temizleyerek yakındaki fırsatları tekrar görebilirsin.")
+                            SecondaryButton(title: "Filtreleri temizle", icon: "xmark.circle") {
+                                viewModel.searchText = ""
+                                viewModel.selectedCategory = nil
+                            }
+                        }
                     } else {
                         offerSection(title: "Yakınındakiler", offers: nearYouOffers)
                         offerSection(title: "Bitmek Üzere", offers: endingSoonOffers)
@@ -158,7 +195,7 @@ struct HomeFeedScreen: View {
             OfferDetailScreen(offer: offer)
         }
         .navigationDestination(item: $selectedList) { route in
-            OfferListScreen(title: route.title, offers: route.offers)
+            OfferListScreen(title: route.title, kind: route.kind, selectedCategoryId: route.categoryId)
         }
     }
 
@@ -195,7 +232,7 @@ struct HomeFeedScreen: View {
     private func offerSection(title: String, offers: [Offer]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeaderView(title: title, actionTitle: "Tümü") {
-                selectedList = OfferListRoute(title: title, offers: offers)
+                selectedList = OfferListRoute(title: title, kind: title == "Yakınındakiler" ? .nearYou : .endingSoon)
             }
             if offers.isEmpty {
                 EmptyStateView(icon: "tag", title: "Bu bölüm boş", message: "Yeni yerel fırsatlar eklendiğinde burada görünecek.")
@@ -225,27 +262,38 @@ struct HomeFeedScreen: View {
         }
     }
 
-    private func isEndingSoon(_ offer: Offer) -> Bool {
-        endingSoonRank(offer) < 99
+    private var activeOfferCount: Int {
+        appState.customerVisibleOffers().filter { appState.visibleStatus(for: $0) == .active }.count
     }
 
     private func endingSoonRank(_ offer: Offer) -> Int {
-        if offer.expiresIn.contains("dk") { return 0 }
-        if offer.expiresIn.contains("saat") { return 1 }
-        if ["Bugün", "Bu gece"].contains(offer.expiresIn) { return 2 }
-        return 99
+        appState.endingSoonRank(for: offer)
+    }
+
+    private func discountRank(_ offer: Offer) -> Int {
+        Int(offer.discountText.filter(\.isNumber)) ?? (offer.discountType == .buyOneGetOne ? 50 : 0)
     }
 }
 
 struct OfferListRoute: Identifiable, Hashable {
     let id = UUID()
     var title: String
-    var offers: [Offer]
+    var kind: OfferListKind
+    var categoryId: String?
+}
+
+enum OfferListKind: Hashable {
+    case featured
+    case nearYou
+    case endingSoon
+    case category
+    case all
 }
 
 struct OfferListScreen: View {
     var title: String
-    var offers: [Offer]
+    var kind: OfferListKind = .all
+    var selectedCategoryId: String?
     @EnvironmentObject private var appState: AppState
     @State private var query = ""
     @State private var selectedCategory: Category?
@@ -253,7 +301,7 @@ struct OfferListScreen: View {
     @State private var selectedOffer: Offer?
 
     private var filteredOffers: [Offer] {
-        let filtered = offers.filter { offer in
+        let filtered = baseOffers.filter { offer in
             let matchesCategory = selectedCategory == nil || offer.category.id == selectedCategory?.id
             guard !query.isEmpty else { return matchesCategory }
             return matchesCategory && (
@@ -266,6 +314,9 @@ struct OfferListScreen: View {
         case .recommended:
             let preferenceIds = Set(appState.selectedPreferenceCategoryIds)
             return filtered.sorted { lhs, rhs in
+                let ls = appState.visibleStatus(for: lhs) == .active ? 0 : 1
+                let rs = appState.visibleStatus(for: rhs) == .active ? 0 : 1
+                if ls != rs { return ls < rs }
                 let lp = preferenceIds.contains(lhs.category.id) ? 0 : 1
                 let rp = preferenceIds.contains(rhs.category.id) ? 0 : 1
                 if lp != rp { return lp < rp }
@@ -274,10 +325,34 @@ struct OfferListScreen: View {
         case .nearest:
             return filtered.sorted { $0.distance < $1.distance }
         case .endingSoon:
-            return filtered.sorted { $0.expiresIn < $1.expiresIn }
+            return filtered.sorted { appState.endingSoonRank(for: $0) < appState.endingSoonRank(for: $1) }
         case .newest:
             return filtered
         }
+    }
+
+    private var baseOffers: [Offer] {
+        let active = appState.customerVisibleOffers().filter { appState.visibleStatus(for: $0) == .active }
+        switch kind {
+        case .featured:
+            return active.sorted { discountRank($0) > discountRank($1) }
+        case .nearYou:
+            return active.sorted { $0.distance < $1.distance }
+        case .endingSoon:
+            return active.filter { appState.endingSoonRank(for: $0) < 999 }
+        case .category:
+            guard let selectedCategoryId else { return active }
+            return active.filter { $0.category.id == selectedCategoryId }
+        case .all:
+            return appState.customerVisibleOffers()
+        }
+    }
+
+    init(title: String, kind: OfferListKind = .all, selectedCategoryId: String? = nil) {
+        self.title = title
+        self.kind = kind
+        self.selectedCategoryId = selectedCategoryId
+        _selectedCategory = State(initialValue: MockData.categories.first { $0.id == selectedCategoryId })
     }
 
     var body: some View {
@@ -308,7 +383,13 @@ struct OfferListScreen: View {
                     }
                     .pickerStyle(.segmented)
                     if filteredOffers.isEmpty {
-                        EmptyStateView(icon: "magnifyingglass", title: "Sonuç yok", message: "Farklı bir arama deneyebilirsin.")
+                        VStack(spacing: 12) {
+                            EmptyStateView(icon: "magnifyingglass", title: "Sonuç yok", message: "Farklı bir arama veya kategori deneyebilirsin.")
+                            SecondaryButton(title: "Filtreleri temizle", icon: "xmark.circle") {
+                                query = ""
+                                selectedCategory = nil
+                            }
+                        }
                     } else {
                         LazyVStack(spacing: 14) {
                             ForEach(filteredOffers) { offer in
@@ -328,6 +409,10 @@ struct OfferListScreen: View {
             OfferDetailScreen(offer: offer)
         }
     }
+}
+
+private func discountRank(_ offer: Offer) -> Int {
+    Int(offer.discountText.filter(\.isNumber)) ?? (offer.discountType == .buyOneGetOne ? 50 : 0)
 }
 
 private enum OfferListSort: CaseIterable {

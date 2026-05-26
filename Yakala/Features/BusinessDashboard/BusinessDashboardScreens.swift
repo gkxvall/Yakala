@@ -183,14 +183,24 @@ struct BusinessDashboardScreen: View {
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatCardView(title: "Aktif fırsat", value: "\(appState.activeBusinessOffers().count)", icon: "tag.fill")
-                        StatCardView(title: "Görüntülenme", value: compactCount(localViews + MockData.analytics.views), icon: "eye.fill", tint: .blue)
+                        NavigationLink {
+                            BusinessAnalyticsScreen()
+                        } label: {
+                            StatCardView(title: "Görüntülenme", value: compactCount(localViews + MockData.analytics.views), icon: "eye.fill", tint: .blue)
+                        }
+                        .buttonStyle(.plain)
                         NavigationLink {
                             BusinessClaimsScreen()
                         } label: {
                             StatCardView(title: "Yakalama", value: compactCount(localClaims + MockData.analytics.claims), icon: "qrcode", tint: YakalaTheme.success)
                         }
                         .buttonStyle(.plain)
-                        StatCardView(title: "Kaydetme", value: compactCount(localSaves + MockData.analytics.saves), icon: "heart.fill", tint: YakalaTheme.warning)
+                        NavigationLink {
+                            BusinessAnalyticsScreen()
+                        } label: {
+                            StatCardView(title: "Kaydetme", value: compactCount(localSaves + MockData.analytics.saves), icon: "heart.fill", tint: YakalaTheme.warning)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -652,19 +662,24 @@ struct BusinessAnalyticsScreen: View {
         let views = max(1, localViews)
         return localSaves > 0 ? Double(localSaves) / Double(views) * 100 : analytics.saveRate
     }
-    private var bestPerformingOffers: [String] {
+    private var bestPerformingOffers: [Offer] {
         let scored = appState.allBusinessOffers()
             .map { offer in
                 (
-                    offer.title,
+                    offer,
                     appState.offerClaimCounts[offer.id, default: 0] + appState.offerSaveCounts[offer.id, default: 0]
                 )
             }
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
-            .map { $0.0 }
+            .map(\.0)
 
-        return scored.isEmpty ? analytics.bestPerformingOffers : Array(scored.prefix(5))
+        if scored.isEmpty {
+            return analytics.bestPerformingOffers.compactMap { title in
+                appState.allBusinessOffers().first { $0.title == title }
+            }
+        }
+        return Array(scored.prefix(5))
     }
 
     var body: some View {
@@ -701,17 +716,32 @@ struct BusinessAnalyticsScreen: View {
 
                     AnalyticsCardView(title: "En iyi fırsatlar", subtitle: "Yakalama ve kaydetmeye göre") {
                         VStack(alignment: .leading, spacing: 10) {
-                            ForEach(Array(bestPerformingOffers.enumerated()), id: \.offset) { index, title in
-                                HStack {
-                                    Text("\(index + 1)")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                        .frame(width: 30, height: 30)
-                                        .background(YakalaTheme.primary)
-                                        .clipShape(Circle())
-                                    Text(title)
-                                        .font(.subheadline.weight(.semibold))
-                                    Spacer()
+                            if bestPerformingOffers.isEmpty {
+                                Text("Henüz yerel analiz verisi yok. Fırsatlar görüntülendikçe burada sıralama oluşur.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(YakalaTheme.textSecondary)
+                            } else {
+                                ForEach(Array(bestPerformingOffers.enumerated()), id: \.element.id) { index, offer in
+                                    NavigationLink {
+                                        BusinessOfferDetailScreen(offer: offer)
+                                    } label: {
+                                        HStack {
+                                            Text("\(index + 1)")
+                                                .font(.headline)
+                                                .foregroundStyle(.white)
+                                                .frame(width: 30, height: 30)
+                                                .background(YakalaTheme.primary)
+                                                .clipShape(Circle())
+                                            Text(offer.title)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(YakalaTheme.textPrimary)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(YakalaTheme.textSecondary)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             Divider()
@@ -757,13 +787,13 @@ struct QRScannerScreen: View {
 
                     FormInputView(title: "Manuel Kod", placeholder: "YAKALA-XXXXXX-2026", text: $code)
                     PrimaryButton(title: "Kodu Doğrula", icon: "checkmark.seal.fill") {
-                        result = appState.validateClaimCode(code)
+                        code = normalizedCode
+                        result = appState.validateClaimCode(normalizedCode)
                     }
 
                     if let demo = appState.activeClaimsForCurrentBusiness().first {
                         SecondaryButton(title: "Demo Kod Kullan", icon: "wand.and.stars") {
                             code = demo.code
-                            result = appState.validateClaimCode(demo.code)
                         }
                     }
 
@@ -796,6 +826,10 @@ struct QRScannerScreen: View {
                 .presentationDetents([.medium, .large])
         }
     }
+
+    private var normalizedCode: String {
+        code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
 }
 
 struct ClaimValidationResultScreen: View {
@@ -805,7 +839,7 @@ struct ClaimValidationResultScreen: View {
 
     private var offer: Offer? {
         guard let offerId = result.claimRecord?.offerId else { return nil }
-        return appState.businessVisibleOffer(by: offerId) ?? appState.customerVisibleOffers().first { $0.id == offerId }
+        return appState.businessVisibleOffer(by: offerId) ?? appState.offerByIdIncludingDeleted(offerId)
     }
 
     var body: some View {
@@ -923,7 +957,7 @@ private struct ClaimBusinessRow: View {
     @EnvironmentObject private var appState: AppState
 
     private var offer: Offer? {
-        appState.businessVisibleOffer(by: record.offerId) ?? appState.customerVisibleOffers().first { $0.id == record.offerId }
+        appState.businessVisibleOffer(by: record.offerId) ?? appState.offerByIdIncludingDeleted(record.offerId)
     }
 
     var body: some View {
@@ -1266,8 +1300,8 @@ private struct OfferManagementRow: View {
                     }
                     .buttonStyle(.plain)
                     SmallActionButton(
-                        title: offer.status == .paused ? "Sürdür" : "Duraklat",
-                        icon: offer.status == .paused ? "play.fill" : "pause.fill",
+                        title: appState.visibleStatus(for: offer) == .paused ? "Sürdür" : "Duraklat",
+                        icon: appState.visibleStatus(for: offer) == .paused ? "play.fill" : "pause.fill",
                         action: { onPause?() }
                     )
                     SmallActionButton(title: "Sil", icon: "trash.fill", tint: YakalaTheme.primary) {

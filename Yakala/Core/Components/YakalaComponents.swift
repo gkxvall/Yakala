@@ -162,10 +162,32 @@ struct DiscountBadgeView: View {
         Text(text)
             .font(compact ? .caption.weight(.black) : .headline.weight(.black))
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, compact ? 3 : 6)
             .padding(.vertical, compact ? 2 : 4)
+            .frame(maxWidth: compact ? 54 : 88)
             .background(YakalaTheme.primary)
             .clipShape(RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous))
+    }
+}
+
+struct MiniStatusIconBadge: View {
+    var icon: String
+    var tint: Color
+    var accessibilityLabel: String
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.caption.weight(.black))
+            .foregroundStyle(.white)
+            .frame(width: 28, height: 28)
+            .background(tint)
+            .clipShape(Circle())
+            .overlay(
+                Circle().stroke(YakalaTheme.card.opacity(0.82), lineWidth: 2)
+            )
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -248,21 +270,25 @@ struct OfferCardView: View {
                 }
                 .overlay(alignment: .bottomLeading) {
                     if appState.isOfferClaimed(offer.id) {
-                        StatusPill(text: "Yakalandı", icon: "checkmark.seal.fill", tint: YakalaTheme.success)
+                        MiniStatusIconBadge(icon: "checkmark.seal.fill", tint: YakalaTheme.success, accessibilityLabel: "Fırsat yakalandı")
                             .padding(8)
                     } else if visibleStatus != .active {
-                        StatusPill(text: visibleStatus.rawValue, icon: "pause.circle.fill", tint: YakalaTheme.textSecondary)
+                        MiniStatusIconBadge(icon: statusIcon, tint: statusTint, accessibilityLabel: visibleStatus.rawValue)
+                            .padding(8)
+                    } else if appState.isOfferClaimLimitFull(offer) {
+                        MiniStatusIconBadge(icon: "exclamationmark.circle.fill", tint: YakalaTheme.warning, accessibilityLabel: "Limit doldu")
                             .padding(8)
                     }
                 }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .top) {
                     Text(offer.title)
                         .font(.headline)
                         .foregroundStyle(YakalaTheme.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                        .frame(height: 42, alignment: .topLeading)
                     Spacer(minLength: 8)
                     Button {
                         appState.toggleSavedOffer(offer.id)
@@ -274,6 +300,7 @@ struct OfferCardView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(appState.isOfferSaved(offer.id) ? "Fırsatı kayıttan çıkar" : "Fırsatı kaydet")
+                    .accessibilityHint("Kaydetme durumunu değiştirir")
                 }
 
                 Text(offer.business.name)
@@ -291,14 +318,35 @@ struct OfferCardView: View {
                 Text(offer.category.name)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(YakalaTheme.primaryDark)
+                    .lineLimit(1)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(YakalaTheme.primaryLight)
                     .clipShape(Capsule())
             }
+            .frame(minHeight: 108, alignment: .top)
         }
         .padding(12)
+        .frame(minHeight: 132)
         .yakalaCardStyle()
+    }
+
+    private var statusIcon: String {
+        switch visibleStatus {
+        case .active: return "checkmark.circle.fill"
+        case .scheduled: return "calendar.badge.clock"
+        case .expired: return "clock.badge.xmark.fill"
+        case .paused: return "pause.fill"
+        }
+    }
+
+    private var statusTint: Color {
+        switch visibleStatus {
+        case .active: return YakalaTheme.success
+        case .scheduled: return YakalaTheme.warning
+        case .expired: return YakalaTheme.textSecondary
+        case .paused: return YakalaTheme.warning
+        }
     }
 }
 
@@ -326,19 +374,23 @@ struct FeaturedOfferCardView: View {
                             .font(.headline)
                             .foregroundStyle(appState.isOfferSaved(offer.id) ? YakalaTheme.primary : YakalaTheme.textPrimary)
                             .frame(width: 38, height: 38)
-                            .background(.white.opacity(0.92))
+                            .background(YakalaTheme.card.opacity(0.94))
                             .clipShape(Circle())
                             .padding(12)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(appState.isOfferSaved(offer.id) ? "Fırsatı kayıttan çıkar" : "Fırsatı kaydet")
+                    .accessibilityHint("Kaydetme durumunu değiştirir")
                 }
                 .overlay(alignment: .bottomLeading) {
                     if appState.isOfferClaimed(offer.id) {
-                        StatusPill(text: "Yakalandı", icon: "checkmark.seal.fill", tint: YakalaTheme.success)
+                        MiniStatusIconBadge(icon: "checkmark.seal.fill", tint: YakalaTheme.success, accessibilityLabel: "Fırsat yakalandı")
                             .padding(12)
                     } else if visibleStatus != .active {
-                        StatusPill(text: visibleStatus.rawValue, icon: "pause.circle.fill", tint: YakalaTheme.textSecondary)
+                        MiniStatusIconBadge(icon: statusIcon, tint: statusTint, accessibilityLabel: visibleStatus.rawValue)
+                            .padding(12)
+                    } else if appState.isOfferClaimLimitFull(offer) {
+                        MiniStatusIconBadge(icon: "exclamationmark.circle.fill", tint: YakalaTheme.warning, accessibilityLabel: "Limit doldu")
                             .padding(12)
                     }
                 }
@@ -347,10 +399,12 @@ struct FeaturedOfferCardView: View {
                 Text(offer.title)
                     .font(.headline)
                     .foregroundStyle(YakalaTheme.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .frame(height: 42, alignment: .topLeading)
                 Text(offer.business.name)
                     .font(.subheadline)
                     .foregroundStyle(YakalaTheme.textSecondary)
+                    .lineLimit(1)
                 HStack {
                     Label(String(format: "%.1f km", offer.distance), systemImage: "location.fill")
                     Spacer()
@@ -362,11 +416,30 @@ struct FeaturedOfferCardView: View {
         }
         .padding(12)
         .frame(width: 280)
+        .frame(height: 268, alignment: .top)
         .yakalaCardStyle()
         .opacity(visibleStatus == .expired || visibleStatus == .paused ? 0.62 : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             action?()
+        }
+    }
+
+    private var statusIcon: String {
+        switch visibleStatus {
+        case .active: return "checkmark.circle.fill"
+        case .scheduled: return "calendar.badge.clock"
+        case .expired: return "clock.badge.xmark.fill"
+        case .paused: return "pause.fill"
+        }
+    }
+
+    private var statusTint: Color {
+        switch visibleStatus {
+        case .active: return YakalaTheme.success
+        case .scheduled: return YakalaTheme.warning
+        case .expired: return YakalaTheme.textSecondary
+        case .paused: return YakalaTheme.warning
         }
     }
 }
@@ -382,7 +455,7 @@ struct StatusPill: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(.white.opacity(0.94))
+            .background(YakalaTheme.card.opacity(0.94))
             .clipShape(Capsule())
     }
 }
@@ -553,42 +626,82 @@ struct ToggleRowView: View {
 
 struct BottomSheetOfferPreviewView: View {
     var offers: [Offer]
+    var isExpanded: Bool = true
+    var onToggle: (() -> Void)?
     var onOfferTapped: ((Offer) -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: isExpanded ? 14 : 10) {
             Capsule()
                 .fill(YakalaTheme.border)
                 .frame(width: 38, height: 5)
                 .frame(maxWidth: .infinity)
 
-            SectionHeaderView(title: "Yakındaki Fırsatlar", actionTitle: "\(offers.count)") {}
+            Button {
+                onToggle?()
+            } label: {
+                HStack {
+                    Text("Yakındaki Fırsatlar")
+                        .font(.title3.bold())
+                        .foregroundStyle(YakalaTheme.textPrimary)
+                    Spacer()
+                    Text("\(offers.count)")
+                        .font(.caption.bold())
+                        .foregroundStyle(YakalaTheme.primary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 26)
+                        .background(YakalaTheme.primaryLight)
+                        .clipShape(Capsule())
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
+                        .font(.caption.bold())
+                        .foregroundStyle(YakalaTheme.textSecondary)
+                        .frame(width: 28, height: 28)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Yakındaki fırsatları daralt" : "Yakındaki fırsatları genişlet")
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(offers.prefix(5)) { offer in
-                        Button {
-                            onOfferTapped?(offer)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                            DiscountBadgeView(text: offer.discountText, compact: true)
-                            Text(offer.title)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(YakalaTheme.textPrimary)
-                                .lineLimit(2)
-                            Text(offer.business.name)
-                                .font(.caption)
-                                .foregroundStyle(YakalaTheme.textSecondary)
-                            Label(String(format: "%.1f km", offer.distance), systemImage: "location.fill")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(YakalaTheme.textSecondary)
+            if isExpanded {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(offers.prefix(5)) { offer in
+                            Button {
+                                onOfferTapped?(offer)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        DiscountBadgeView(text: offer.discountText, compact: true)
+                                        Spacer()
+                                        if offer.status != .active {
+                                            MiniStatusIconBadge(icon: offer.status == .paused ? "pause.fill" : "clock.badge.xmark.fill", tint: offer.status == .paused ? YakalaTheme.warning : YakalaTheme.textSecondary, accessibilityLabel: offer.status.rawValue)
+                                        }
+                                    }
+                                    Text(offer.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(YakalaTheme.textPrimary)
+                                        .lineLimit(2)
+                                        .frame(height: 38, alignment: .topLeading)
+                                    Text(offer.business.name)
+                                        .font(.caption)
+                                        .foregroundStyle(YakalaTheme.textSecondary)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    HStack {
+                                        Label(String(format: "%.1f km", offer.distance), systemImage: "location.fill")
+                                        Spacer()
+                                        Label(offer.expiresIn, systemImage: "clock.fill")
+                                    }
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(YakalaTheme.textSecondary)
+                                }
+                                .padding(12)
+                                .frame(width: 204, height: 158, alignment: .topLeading)
+                                .background(YakalaTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(12)
-                        .frame(width: 190, alignment: .leading)
-                        .background(YakalaTheme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
             }

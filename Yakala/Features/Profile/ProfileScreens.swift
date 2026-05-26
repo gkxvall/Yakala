@@ -13,8 +13,8 @@ struct BusinessProfileScreen: View {
 
     private var activeOffers: [Offer] {
         appState.customerVisibleOffers()
-            .filter { $0.business.id == displayBusiness.id }
-            .sorted { appState.visibleStatus(for: $0).rawValue < appState.visibleStatus(for: $1).rawValue }
+            .filter { $0.business.id == displayBusiness.id && appState.visibleStatus(for: $0) == .active }
+            .sorted { $0.distance < $1.distance }
     }
 
     var body: some View {
@@ -28,7 +28,7 @@ struct BusinessProfileScreen: View {
                                 .frame(width: 74)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(.white, lineWidth: 3)
+                                        .stroke(YakalaTheme.card, lineWidth: 3)
                                 )
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 6) {
@@ -48,10 +48,10 @@ struct BusinessProfileScreen: View {
 
                     HStack(spacing: 12) {
                         PrimaryButton(
-                            title: appState.isBusinessFollowed(business.id) ? "Takip Ediliyor" : "Takip Et",
-                            icon: appState.isBusinessFollowed(business.id) ? "checkmark" : "plus"
+                            title: appState.isBusinessFollowed(displayBusiness.id) ? "Takip Ediliyor" : "Takip Et",
+                            icon: appState.isBusinessFollowed(displayBusiness.id) ? "checkmark" : "plus"
                         ) {
-                            appState.toggleFollowBusiness(business.id)
+                            appState.toggleFollowBusiness(displayBusiness.id)
                         }
                         SecondaryButton(title: "Ara", icon: "phone.fill") {
                             callBusiness()
@@ -146,7 +146,7 @@ struct NotificationsScreen: View {
                     .foregroundStyle(YakalaTheme.primary)
 
                     if notifications.isEmpty {
-                        EmptyStateView(icon: "bell", title: "Bildirim yok", message: "Yeni yerel hareketler burada görünecek.")
+                        EmptyStateView(icon: "bell", title: appState.notificationSettings.pushNotifications ? "Bildirim yok" : "Bildirimler kapalı", message: appState.notificationSettings.pushNotifications ? "Yeni yerel hareketler burada görünecek." : "Ayarlar ekranından bildirimleri tekrar açabilirsin.")
                     }
 
                     ForEach(notifications) { item in
@@ -210,11 +210,12 @@ struct NotificationsScreen: View {
     }
 
     private func openNotification(_ item: NotificationItem) {
-        if let offer = appState.customerVisibleOffers().first(where: { item.id.contains($0.id) || item.message.contains($0.title) }) {
+        if let offer = appState.customerVisibleOffers().first(where: { item.id == "local_new_\($0.id)" || item.id == "saved_ending_\($0.id)" || item.id == "claimed_\($0.id)" || item.message == $0.title }) {
             selectedOffer = offer
             return
         }
-        if let business = MockData.businesses.first(where: { item.title.contains($0.name) || item.message.contains($0.name) }) {
+        let businesses = MockData.businesses + [appState.currentBusinessProfile]
+        if let business = businesses.first(where: { item.title.contains($0.name) || item.message.contains($0.name) }) {
             selectedBusiness = business
         }
     }
@@ -260,14 +261,24 @@ struct UserProfileScreen: View {
                     }
 
                     HStack(spacing: 12) {
-                        StatCardView(title: "Kaydedilenler", value: "\(appState.savedOfferIds.count)", icon: "heart.fill")
+                        NavigationLink {
+                            SavedOffersScreen()
+                        } label: {
+                            StatCardView(title: "Kaydedilenler", value: "\(appState.savedOfferIds.count)", icon: "heart.fill")
+                        }
+                        .buttonStyle(.plain)
                         NavigationLink {
                             UserClaimHistoryScreen()
                         } label: {
                             StatCardView(title: "Yakalananlar", value: "\(appState.claimedOfferIds.count)", icon: "qrcode")
                         }
                         .buttonStyle(.plain)
-                        StatCardView(title: "Takip", value: "\(appState.followedBusinessIds.count)", icon: "storefront.fill")
+                        NavigationLink {
+                            FollowedBusinessesScreen()
+                        } label: {
+                            StatCardView(title: "Takip", value: "\(appState.followedBusinessIds.count)", icon: "storefront.fill")
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     VStack(spacing: 10) {
@@ -282,9 +293,14 @@ struct UserProfileScreen: View {
                             SettingsRow(icon: "location.fill", title: "Konum Ayarları")
                         }
                         NavigationLink {
-                            SettingsScreen()
+                            NotificationsScreen()
                         } label: {
                             SettingsRow(icon: "bell.fill", title: "Bildirimler")
+                        }
+                        NavigationLink {
+                            SettingsScreen()
+                        } label: {
+                            SettingsRow(icon: "gearshape.fill", title: "Ayarlar")
                         }
                         NavigationLink {
                             FollowedBusinessesScreen()
@@ -348,7 +364,7 @@ struct SettingsScreen: View {
                     ToggleRowView(title: "Yakındaki fırsat uyarıları", subtitle: "Yakınındaki kampanyalar", isOn: notificationBinding(\.nearbyDealAlerts))
                     ToggleRowView(title: "Bitmek üzere uyarıları", subtitle: "Süresi yaklaşan fırsatlar", isOn: notificationBinding(\.endingSoonAlerts))
                     ToggleRowView(title: "Öğrenci fırsatları", subtitle: "Öğrenci indirimlerini öne çıkar", isOn: notificationBinding(\.studentDeals))
-                    ToggleRowView(title: "Konum kullanımı", subtitle: "Kapalıysa şehir seçimi kullanılır", isOn: notificationBinding(\.locationUsage))
+                    ToggleRowView(title: "Konumu kullan", subtitle: "Kapalıysa şehir seçimi kullanılır", isOn: locationUsageBinding)
                     NavigationLink {
                         CitySelectionScreen()
                     } label: {
@@ -402,6 +418,14 @@ struct SettingsScreen: View {
             appState.notificationSettings[keyPath: keyPath]
         } set: { newValue in
             appState.notificationSettings[keyPath: keyPath] = newValue
+        }
+    }
+
+    private var locationUsageBinding: Binding<Bool> {
+        Binding {
+            appState.isLocationUsageEnabled
+        } set: { enabled in
+            appState.setLocationUsageEnabled(enabled)
         }
     }
 
@@ -523,10 +547,12 @@ struct UserClaimHistoryScreen: View {
                         EmptyStateView(icon: "qrcode", title: "Henüz fırsat yakalamadın.", message: "Fırsatları yakaladığında kodların burada görünecek.")
                     }
                     ForEach(appState.userClaimHistory()) { record in
-                        if let offer = appState.customerVisibleOffers().first(where: { $0.id == record.offerId }) {
+                        if let offer = appState.offerByIdIncludingDeleted(record.offerId) {
                             ClaimHistoryRow(record: record, offer: offer) {
                                 selectedOffer = offer
                             }
+                        } else {
+                            MissingClaimHistoryRow(record: record)
                         }
                     }
                 }
@@ -558,13 +584,18 @@ private struct ClaimHistoryRow: View {
                         .foregroundStyle(YakalaTheme.textSecondary)
                 }
                 Spacer()
-                StatusPill(text: record.status.title, icon: "checkmark.seal.fill", tint: record.status == .redeemed ? YakalaTheme.success : YakalaTheme.primary)
+                StatusPill(text: statusTitle, icon: "checkmark.seal.fill", tint: record.status == .redeemed ? YakalaTheme.success : (appState.visibleStatus(for: offer) == .expired ? YakalaTheme.warning : YakalaTheme.primary))
             }
             Text(record.code)
                 .font(.subheadline.monospaced().weight(.bold))
             Text(record.claimedAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.caption)
                 .foregroundStyle(YakalaTheme.textSecondary)
+            if let redeemedAt = record.redeemedAt {
+                Text("Kullanıldı: \(redeemedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(YakalaTheme.success)
+            }
             HStack {
                 SecondaryButton(title: "Kodu Görüntüle", icon: "qrcode") {
                     onShowCode()
@@ -580,13 +611,22 @@ private struct ClaimHistoryRow: View {
         .padding(14)
         .yakalaCardStyle()
     }
+
+    private var statusTitle: String {
+        if record.status == .redeemed { return record.status.title }
+        if appState.visibleStatus(for: offer) == .expired { return "Süresi Doldu" }
+        return record.status.title
+    }
 }
 
 struct FollowedBusinessesScreen: View {
     @EnvironmentObject private var appState: AppState
 
     private var businesses: [Business] {
-        MockData.businesses.filter { appState.followedBusinessIds.contains($0.id) }
+        (MockData.businesses + [appState.currentBusinessProfile]).reduce(into: [Business]()) { result, business in
+            guard appState.followedBusinessIds.contains(business.id), !result.contains(where: { $0.id == business.id }) else { return }
+            result.append(business)
+        }
     }
 
     var body: some View {
@@ -633,6 +673,33 @@ struct FollowedBusinessesScreen: View {
 
     private func activeOfferCount(for business: Business) -> Int {
         appState.customerVisibleOffers().filter { $0.business.id == business.id && appState.visibleStatus(for: $0) == .active }.count
+    }
+}
+
+private struct MissingClaimHistoryRow: View {
+    var record: ClaimRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Fırsat bulunamadı")
+                    .font(.headline)
+                Spacer()
+                StatusPill(text: record.status.title, icon: "questionmark.circle.fill", tint: YakalaTheme.textSecondary)
+            }
+            Text(record.code)
+                .font(.subheadline.monospaced().weight(.bold))
+            Text(record.claimedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption)
+                .foregroundStyle(YakalaTheme.textSecondary)
+            if let redeemedAt = record.redeemedAt {
+                Text("Kullanıldı: \(redeemedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(YakalaTheme.success)
+            }
+        }
+        .padding(14)
+        .yakalaCardStyle()
     }
 }
 

@@ -397,7 +397,7 @@ private struct PreferenceCard: View {
                     .font(.title2)
                     .foregroundStyle(isSelected ? .white : YakalaTheme.primary)
                     .frame(width: 42, height: 42)
-                    .background(isSelected ? .white.opacity(0.18) : YakalaTheme.primaryLight)
+                    .background(isSelected ? YakalaTheme.card.opacity(0.18) : YakalaTheme.primaryLight)
                     .clipShape(Circle())
                 Text(category.name)
                     .font(.headline)

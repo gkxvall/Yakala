@@ -126,6 +126,10 @@ final class AppState: ObservableObject {
         AppearanceMode(rawValue: storedAppearanceMode) ?? .system
     }
 
+    var isLocationUsageEnabled: Bool {
+        locationMode == .realLocation
+    }
+
     init() {
         selectedPreferenceCategoryIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.selectedPreferenceCategoryIds, defaultValue: [])
         savedOfferIds = UserDefaultsCodableStore.load([String].self, forKey: Keys.savedOfferIds, defaultValue: [])
@@ -183,6 +187,12 @@ final class AppState: ObservableObject {
         storedHasCompletedLocationStep = true
     }
 
+    func setLocationUsageEnabled(_ enabled: Bool) {
+        objectWillChange.send()
+        storedLocationMode = enabled ? LocationMode.realLocation.rawValue : LocationMode.manualCity.rawValue
+        storedHasCompletedLocationStep = true
+    }
+
     func setAppearanceMode(_ mode: AppearanceMode) {
         objectWillChange.send()
         storedAppearanceMode = mode.rawValue
@@ -209,21 +219,24 @@ final class AppState: ObservableObject {
 
     func claimOffer(_ offerId: String) {
         guard !claimedOfferIds.contains(offerId) else { return }
-        claimedOfferIds.append(offerId)
-        offerClaimCounts[offerId, default: 0] += 1
-        if localClaimRecords.contains(where: { $0.offerId == offerId }) { return }
-        let offer = customerVisibleOffers().first { $0.id == offerId }
+        if localClaimRecords.contains(where: { $0.offerId == offerId }) {
+            claimedOfferIds.append(offerId)
+            return
+        }
+        guard let offer = offerByIdIncludingDeleted(offerId) else { return }
         localClaimRecords.append(
             ClaimRecord(
                 id: "claim_\(offerId)_\(userEmail.lowercased().filter { $0.isLetter || $0.isNumber })",
                 offerId: offerId,
-                businessId: offer?.business.id ?? "",
+                businessId: offer.business.id,
                 userName: userName,
                 code: claimCode(for: offerId),
                 claimedAt: Date(),
                 status: .active
             )
         )
+        claimedOfferIds.append(offerId)
+        offerClaimCounts[offerId, default: 0] += 1
     }
 
     func isOfferClaimed(_ offerId: String) -> Bool {
@@ -390,7 +403,7 @@ final class AppState: ObservableObject {
     }
 
     func clearNotifications() {
-        hiddenNotificationIds = generatedNotificationIds()
+        hiddenNotificationIds = rawGeneratedNotifications().map(\.id)
         readNotificationIds = []
     }
 
@@ -477,8 +490,18 @@ final class AppState: ObservableObject {
         allBusinessOffers().first { $0.id == id }
     }
 
+    func offerByIdIncludingDeleted(_ id: String) -> Offer? {
+        if let offer = locallyCreatedOffers.first(where: { $0.id == id }) {
+            return withVisibleStatus(offer)
+        }
+        if let offer = MockData.offers.first(where: { $0.id == id }) {
+            return withVisibleStatus(offer)
+        }
+        return nil
+    }
+
     func canClaimOffer(_ offer: Offer) -> Bool {
-        visibleStatus(for: offer) == .active && effectiveClaimCount(for: offer) < offer.maxClaims
+        visibleStatus(for: offer) == .active && !isOfferClaimLimitFull(offer)
     }
 
     func visibleStatus(for offer: Offer) -> OfferStatus {
@@ -491,21 +514,51 @@ final class AppState: ObservableObject {
         offer.claimedCount + (offerClaimCounts[offer.id] ?? 0)
     }
 
+    func isOfferClaimLimitFull(_ offer: Offer) -> Bool {
+        effectiveClaimCount(for: offer) >= offer.maxClaims
+    }
+
+    func claimFailureMessage(for offer: Offer) -> String {
+        switch visibleStatus(for: offer) {
+        case .paused:
+            return "Bu fırsat duraklatılmış."
+        case .expired:
+            return "Bu fırsatın süresi dolmuş."
+        case .scheduled:
+            return "Bu fırsat henüz başlamadı."
+        case .active:
+            return isOfferClaimLimitFull(offer) ? "Bu fırsat için kullanım limiti dolmuş." : "Bu fırsat şu anda kullanılamıyor."
+        }
+    }
+
+    func remainingValidityText(for offer: Offer) -> String {
+        if visibleStatus(for: offer) == .expired { return "Süresi doldu" }
+        if visibleStatus(for: offer) == .scheduled { return "Henüz başlamadı" }
+        if offer.expiresIn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return offer.validUntil
+        }
+        return "\(offer.expiresIn) kaldı"
+    }
+
+    func endingSoonRank(for offer: Offer) -> Int {
+        let text = offer.expiresIn.lowercased()
+        if text.contains("dk") { return 0 }
+        if text.contains("saat") {
+            let number = Int(text.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 24
+            return min(24, max(1, number))
+        }
+        if text.contains("bugün") || text.contains("bu gece") { return 25 }
+        if text.contains("yarın") { return 48 }
+        if text.contains("gün") {
+            let number = Int(text.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) ?? 99
+            return min(99, 48 + number)
+        }
+        return 999
+    }
+
     func generatedNotifications() -> [NotificationItem] {
-        var items: [NotificationItem] = []
-        for offer in locallyCreatedOffers.prefix(3) where followedBusinessIds.contains(offer.business.id) {
-            items.append(NotificationItem(id: "local_new_\(offer.id)", title: "\(offer.business.name) yeni fırsat yayınladı", message: offer.title, time: "Az önce", icon: "bell.badge.fill", kind: .followedBusiness))
-        }
-        for offer in customerVisibleOffers() where savedOfferIds.contains(offer.id) && ["45 dk", "2 saat", "5 saat", "8 saat", "Bugün", "Bu gece"].contains(offer.expiresIn) {
-            items.append(NotificationItem(id: "saved_ending_\(offer.id)", title: "Kaydettiğin fırsat bitmek üzere", message: "\(offer.title) için son zamanlar.", time: "Bugün", icon: "clock.badge.exclamationmark.fill", kind: .endingSoon))
-        }
-        for id in claimedOfferIds.prefix(3) {
-            if let offer = customerVisibleOffers().first(where: { $0.id == id }) {
-                items.append(NotificationItem(id: "claimed_\(id)", title: "Yakalanan fırsatın hazır", message: "\(offer.business.name) kodunu kasada gösterebilirsin.", time: "Bugün", icon: "qrcode", kind: .nearbyRecommendation))
-            }
-        }
-        let fallback = items.isEmpty ? MockData.notifications : items + MockData.notifications
-        return fallback.filter { item in
+        guard notificationSettings.pushNotifications else { return [] }
+        return rawGeneratedNotifications().filter { item in
             guard !hiddenNotificationIds.contains(item.id) else { return false }
             if item.kind == .nearbyRecommendation && !notificationSettings.nearbyDealAlerts { return false }
             if item.kind == .endingSoon && !notificationSettings.endingSoonAlerts { return false }
@@ -514,8 +567,20 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func generatedNotificationIds() -> [String] {
-        generatedNotifications().map(\.id)
+    func rawGeneratedNotifications() -> [NotificationItem] {
+        var items: [NotificationItem] = []
+        for offer in locallyCreatedOffers.prefix(3) where followedBusinessIds.contains(offer.business.id) {
+            items.append(NotificationItem(id: "local_new_\(offer.id)", title: "\(offer.business.name) yeni fırsat yayınladı", message: offer.title, time: "Az önce", icon: "bell.badge.fill", kind: .followedBusiness))
+        }
+        for offer in customerVisibleOffers() where savedOfferIds.contains(offer.id) && endingSoonRank(for: offer) < 48 {
+            items.append(NotificationItem(id: "saved_ending_\(offer.id)", title: "Kaydettiğin fırsat bitmek üzere", message: "\(offer.title) için son zamanlar.", time: "Bugün", icon: "clock.badge.exclamationmark.fill", kind: .endingSoon))
+        }
+        for id in claimedOfferIds.prefix(3) {
+            if let offer = offerByIdIncludingDeleted(id) {
+                items.append(NotificationItem(id: "claimed_\(id)", title: "Yakalanan fırsatın hazır", message: "\(offer.business.name) kodunu kasada gösterebilirsin.", time: "Bugün", icon: "qrcode", kind: .nearbyRecommendation))
+            }
+        }
+        return items.isEmpty ? MockData.notifications : items + MockData.notifications
     }
 
     func resetDemoData() {
@@ -559,6 +624,12 @@ final class AppState: ObservableObject {
         } else {
             ids.append(id)
         }
+    }
+
+    private func withVisibleStatus(_ offer: Offer) -> Offer {
+        var updated = offer
+        updated.status = visibleStatus(for: offer)
+        return updated
     }
 
     private func discountText(for type: DiscountType, originalPrice: Double?, discountedPrice: Double?) -> String {

@@ -13,15 +13,18 @@ struct SearchScreen: View {
             return matchesCategory && (
                 offer.title.localizedCaseInsensitiveContains(query) ||
                 offer.business.name.localizedCaseInsensitiveContains(query) ||
-                offer.category.name.localizedCaseInsensitiveContains(query) ||
-                offer.business.name.localizedCaseInsensitiveContains(query)
+                offer.category.name.localizedCaseInsensitiveContains(query)
             )
         }
     }
 
     private var businessResults: [Business] {
         guard !query.isEmpty else { return [] }
-        return MockData.businesses.filter {
+        let allBusinesses = (MockData.businesses + [appState.currentBusinessProfile]).reduce(into: [Business]()) { result, business in
+            guard !result.contains(where: { $0.id == business.id }) else { return }
+            result.append(business)
+        }
+        return allBusinesses.filter {
             $0.name.localizedCaseInsensitiveContains(query) ||
             $0.category.name.localizedCaseInsensitiveContains(query) ||
             $0.address.localizedCaseInsensitiveContains(query)
@@ -34,6 +37,27 @@ struct SearchScreen: View {
                 VStack(alignment: .leading, spacing: 22) {
                     SearchBarView(text: $query, placeholder: "Ne arıyorsun?") {
                         appState.addRecentSearch(query)
+                    }
+
+                    if let selectedCategory {
+                        HStack(spacing: 8) {
+                            Label("Kategori: \(selectedCategory.name)", systemImage: selectedCategory.icon)
+                                .font(.caption.weight(.semibold))
+                            Button {
+                                self.selectedCategory = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Kategori filtresini temizle")
+                        }
+                        .foregroundStyle(YakalaTheme.primary)
+                        .padding(.leading, 12)
+                        .padding(.trailing, 6)
+                        .frame(height: 38)
+                        .background(YakalaTheme.primaryLight)
+                        .clipShape(Capsule())
                     }
 
                     if query.isEmpty {
@@ -66,10 +90,11 @@ struct SearchScreen: View {
                         VStack(alignment: .leading, spacing: 12) {
                             SectionHeaderView(title: "Popüler Kategoriler", actionTitle: nil)
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                                ForEach(MockData.categories.prefix(8)) { category in
+                                ForEach(MockData.categories) { category in
                                     Button {
                                         selectedCategory = category
                                         query = ""
+                                        appState.addRecentSearch(category.name)
                                     } label: {
                                         BusinessCategoryTile(category: category, isSelected: selectedCategory?.id == category.id)
                                     }
@@ -151,12 +176,83 @@ private struct FlowLayout<Data: RandomAccessCollection, Content: View>: View whe
     var content: (Data.Element) -> Content
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], alignment: .leading, spacing: 10) {
+        WrapLayout(horizontalSpacing: 8, verticalSpacing: 8) {
             ForEach(Array(items), id: \.self) { item in
                 content(item)
             }
         }
     }
+}
+
+private struct WrapLayout: Layout {
+    var horizontalSpacing: CGFloat = 8
+    var verticalSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? 320
+        let rows = rows(in: maxWidth, subviews: subviews)
+        let height = rows.reduce(CGFloat.zero) { total, row in
+            total + row.height + (row.index == rows.last?.index ? 0 : verticalSpacing)
+        }
+        return CGSize(width: maxWidth, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = rows(in: bounds.width, subviews: subviews)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: x, y: y),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: item.size.width, height: item.size.height)
+                )
+                x += item.size.width + horizontalSpacing
+            }
+            y += row.height + verticalSpacing
+        }
+    }
+
+    private func rows(in maxWidth: CGFloat, subviews: Subviews) -> [WrapRow] {
+        var rows: [WrapRow] = []
+        var currentItems: [WrapItem] = []
+        var currentWidth: CGFloat = 0
+        var currentHeight: CGFloat = 0
+        var rowIndex = 0
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let proposedWidth = currentItems.isEmpty ? size.width : currentWidth + horizontalSpacing + size.width
+            if proposedWidth > maxWidth, !currentItems.isEmpty {
+                rows.append(WrapRow(index: rowIndex, items: currentItems, height: currentHeight))
+                rowIndex += 1
+                currentItems = [WrapItem(index: index, size: size)]
+                currentWidth = size.width
+                currentHeight = size.height
+            } else {
+                currentItems.append(WrapItem(index: index, size: size))
+                currentWidth = proposedWidth
+                currentHeight = max(currentHeight, size.height)
+            }
+        }
+
+        if !currentItems.isEmpty {
+            rows.append(WrapRow(index: rowIndex, items: currentItems, height: currentHeight))
+        }
+        return rows
+    }
+}
+
+private struct WrapRow {
+    var index: Int
+    var items: [WrapItem]
+    var height: CGFloat
+}
+
+private struct WrapItem {
+    var index: Int
+    var size: CGSize
 }
 
 #Preview {
